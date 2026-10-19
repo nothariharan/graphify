@@ -128,7 +128,46 @@ physics off), (3) keep capability. Aesthetics levers (straight/discrete) optiona
       stalled frames 13-91/90 -> **0-1/90**. Mid-gesture shots: `shots/curved-pan-held.png`,
       `shots/curved-zoom-held.png`; `view/after.html` rebuilt from `base-ours-v7.html`.
 
+13. [DONE 2026-10-19] Committed the gesture work and moved the loop into its own worktree so the
+    user's checkout stays clean and later agents inherit the state: local commit `3a09ba73` on
+    `perf/graph-view-lag`, worktree branch `perf/graph-smoothness` at
+    `C:\Users\HARIHARAN\.t3\worktrees\Graphify\perf-graph-smoothness`. `perf-lab/` (harness, CSVs,
+    lane docs, vendored vis) is now tracked; generated artifacts (`variants/`, `view/`, `work/`,
+    `results/chart.html`) stay gitignored and were copied in. Exporter hash verified unchanged
+    (`3306ea51…`), `tests/test_html_perf_levers.py` 20 pass in the worktree, both served pages
+    smoke clean from the worktree.
+14. [DONE 2026-10-19] Wrote `perf-lab/AGENTS.md`, the handoff protocol: the ask in the user's
+    words, the hard rules (capability never reduced; edges never hidden in a gesture; in-motion
+    must match at-rest; model pin; no PR/push), the measurement contract, the evidence registry
+    (which file a finding must land in), the lane board, a tick recipe, definition of done, the
+    traps already paid for, and a first-10-minutes checklist.
+15. [DONE 2026-10-19] `harness/bench_lock.py`: an exclusive gate so parallel agents cannot
+    corrupt each other's numbers. `run --why "..." -- <cmd>` holds the lock for the child's
+    lifetime, releases, and appends to `results/bench-runs.log` (the audit trail of every
+    measurement in this lab). Verified: exclusion holds (a second agent blocks), stale locks are
+    stolen after 20 min, `--force` steals now. Fixed a real bug found while testing: the steal
+    path detected a dead holder but never removed the file, so it waited forever.
+16. [ACTIVE 2026-10-19] Three lanes dispatched as child agents (model-pinned
+    `opencode/deepseek-v4.1-flash-free`), each pointed at `AGENTS.md` as its binding contract,
+    lane-prefixed filenames, and told not to touch `graphify/exporters/html.py`:
+    - **L9** node-draw batching — taskId `…graphify-perf-L9-r1`.
+    - **L10** instant first open (bake the layout at export) — taskId `…graphify-perf-L10-r1`.
+    - **L11** viewer experience (focus/fly-to/HUD/legend) — taskId `…graphify-perf-L11-r1`.
+    The loop owner integrates a winner only after its lane doc + CSV + parity proof exist.
+
 ## Tick status
+2026-10-19 (restructure + lanes L9-L11): the felt-smoothness work was committed (`3a09ba73`)
+and the loop moved into its own worktree (`perf/graph-smoothness`), so the user's checkout is
+clean and any later agent can pick this up from a branch instead of a dirty tree. `perf-lab/`
+is now tracked and `AGENTS.md` is the handoff protocol: hard rules, the measurement contract,
+the evidence registry, the lane board, the traps, and a first-10-minutes checklist. Every
+measurement now goes through `harness/bench_lock.py` (audited in `results/bench-runs.log`), so
+parallel agents cannot silently corrupt each other's numbers — verified by blocking a second
+agent while one held the lock. The 30-minute loop is armed in this thread. Three lanes are
+running as child agents: L9 (nodes are now the frame floor), L10 (instant first open), L11
+(viewer experience). Next tick: integrate whichever lane has a measured, parity-proved winner
+into `graphify/exporters/html.py`, or take the next STATE item if the lanes are still running.
+
 2026-10-17 tick 3 (curve fidelity): the batch shipped in tick 2 drew straight lines during a
 gesture, which is cheap but is a different picture from the resting graph. `probe_motion_pixels.mjs`
 held a pan/zoom, snapshotted the canvas, released it so vis redrew the same camera, and diffed:

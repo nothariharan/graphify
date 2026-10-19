@@ -3,6 +3,14 @@
 Everything an agent needs to continue this work without re-deriving it. If you are a
 subagent or a fresh session, read this file, then `STATE.md`, then the lane you are working.
 
+**Where this runs:** the lab lives in its own worktree,
+`C:\Users\HARIHARAN\.t3\worktrees\Graphify\perf-graph-smoothness`, on branch
+`perf/graph-smoothness` (based on `3a09ba73` from `perf/graph-view-lag`). The user's main
+checkout, `C:\Users\HARIHARAN\Desktop\Graphify`, is theirs — work here, commit here, and leave
+that one alone. The comparison server for the user is
+`python -m http.server 8231 --bind 127.0.0.1 --directory .` run from **this** worktree's
+`perf-lab`, serving `view/before.html` and `view/after.html`.
+
 ## 1. The ask, in the user's words
 
 > "i want the lag to be reduced, the feel of using the graph to be smooth and proper and feel
@@ -34,7 +42,7 @@ behave worse is a regression.
 7. **Never `--use-gl=swiftshader`** for a WebGL measurement, and never treat a single run's
    absolute fps as a result (§4).
 
-## 3. Where things stand (shipped in the exporter, uncommitted→committed on `perf/graph-view-lag`)
+## 3. Where things stand (shipped in the exporter, committed as `3a09ba73`)
 
 `graphify/exporters/html.py` — sha256 `3306ea513a4f05a125e38c35028f9c0535d052daeb947300d2937c119dff1e76`
 
@@ -168,7 +176,7 @@ use" — and focus mode is also faster because fewer things draw.
    `tests/test_html_perf_levers.py`, and rebuild `variants/base-ours-v<next>.html`.
 7. Rebuild `view/after.html` (`make_view.py`), smoke test it, re-run `chart.py`.
 8. Log: lane doc tables, `DECISIONS.tsv` row, `LOG.md` lines, `STATE.md` tick status.
-9. Commit locally (`perf/graph-view-lag`). Never push.
+9. Commit locally (`perf/graph-smoothness`). Never push.
 
 ## 8. Definition of done for a lever
 
