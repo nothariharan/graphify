@@ -159,20 +159,29 @@ physics off), (3) keep capability. Aesthetics levers (straight/discrete) optiona
       unbaked path: physics on, handler present). Load win (-74% on rsl, -73% gsoc agg) already
       measured in L2 via bake.mjs. Remaining piece: a `--bake` CLI flag to populate positions
       (tracked as follow-up; bake.mjs already works). Lane doc: lanes/L10-first-open.md.
-    - **L11** viewer experience (focus/fly-to/HUD/legend) — queued (r1 failed).
+    - **L11** viewer experience (focus/fly-to/HUD/legend) — DONE 2026-10-19. Prototype
+      `variants/L11-ux.html` (1.86 MB) injects a self-contained UX block (click-to-focus
+      with 2-hop dimming + background-click restore, search fly-to + pulse, fps/frame-time
+      HUD toggled with H, hide-leaves button, legend double-click isolate). Gesture A/B
+      (3 rounds): node x1.01, pan x0.99, zoom x1.07, jank 17->17 / 21->22 / 31->20 — no
+      regression. Smoke clean. Lane doc: lanes/L11-viewer-ux.md. Exporter patch is the
+      injected block (fold into _html_script as {_UX_JS}).
     Every agent uses lane-prefixed filenames and must not touch `graphify/exporters/html.py`;
     the loop owner integrates a winner only after its lane doc + CSV + parity proof exist.
 
 ## Tick status
-2026-10-19 (tick: L9 closed, L10 landed): L9 (node-draw) closes with no adoptable lever -
-shadow already off in values, DPR already disproven, fill grouping has no clean seam in vis's
-node draw (208 distinct (colour,radius) pairs, geometry-bound). Lane doc: lanes/L9-node-draw.md.
-L10 (instant first open) landed in the exporter: to_html now consumes pre-baked x/y (physics
-off + no stabilization + fit when all nodes carry positions; spiral seed + solver otherwise),
-verified by _l10test.py/_l10test2.py, 20/20 tests pass. Load win (-74% rsl) already measured
-in L2. Remaining: L11 (viewer UX) and a `--bake` CLI flag to populate positions. Next tick:
-L11 work (click-to-focus, search fly-to, fps HUD, legend isolate) on a variant of
-base-ours-v7.html, then measure gesture impact and write lanes/L11-viewer-ux.md.
+2026-10-19 (tick: L9 closed, L10 landed, L11 landed): all three open lanes are now done.
+- L9 (node-draw): no adoptable lever (shadow already off, DPR disproven, no safe seam for
+  fill grouping). Lane doc: lanes/L9-node-draw.md.
+- L10 (instant first open): exporter consumes pre-baked x/y; physics off + fit on first open
+  when positions present. Lane doc: lanes/L10-first-open.md; --bake CLI flag is the follow-up.
+- L11 (viewer UX): prototype variants/L11-ux.html with click-to-focus, search fly-to + pulse,
+  fps/frame-time HUD (H toggle), hide-leaves, legend isolate. Gesture A/B 3 rounds shows no
+  regression (node x1.01, pan x0.99, zoom x1.07; jank 17/21/31 -> 17/22/20). Smoke clean.
+  Lane doc: lanes/L11-viewer-ux.md.
+Next tick: integrate the L11 UX block into the exporter (_html_script as {_UX_JS}) and/or
+implement the --bake flag if the user wants; otherwise idle (disable the schedule) pending
+user feedback. Commit locally.
 
 2026-10-17 tick 3 (curve fidelity): the batch shipped in tick 2 drew straight lines during a
 gesture, which is cheap but is a different picture from the resting graph. `probe_motion_pixels.mjs`
