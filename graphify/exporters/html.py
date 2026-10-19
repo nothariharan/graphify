@@ -458,10 +458,22 @@ network.on('afterDrawing', function(ctx) {{
 
 def _html_script(nodes_json: str, edges_json: str, legend_json: str,
                  defer_arrows: bool = False,
-                 lean_gestures: bool = False) -> str:
+                 lean_gestures: bool = False,
+                 baked: bool = False) -> str:
     # Arrowheads are deferred to hover only on dense graphs (see
     # ARROW_DEFER_EDGE_THRESHOLD); otherwise emitted exactly as before.
     _arrow_default = "false" if defer_arrows else "true, scaleFactor: 0.5"
+    # Pre-baked positions (#perf L10): when the graph ships stabilized x/y,
+    # skip the on-load solver entirely (physics off, no stabilization pass).
+    physics_enabled = "false" if baked else "true"
+    stab_iters = "0" if baked else "200"
+    stabilization_handler = "" if baked else (
+        "network.once('stabilizationIterationsDone', () => {\\n"
+        "  network.setOptions({ physics: { enabled: false } });\\n"
+        "  _savePositions();\\n"
+        "});"
+    )
+    baked_fit_js = "try { network.fit({ animation: false }); } catch (e) {}" if baked else ""
     return f"""<script>
 const RAW_NODES = {nodes_json};
 const RAW_EDGES = {edges_json};
@@ -476,12 +488,11 @@ function esc(s) {{
 const nodesDS = new vis.DataSet(RAW_NODES.map((n, i) => ({{
   id: n.id, label: n.label, color: n.color, size: n.size,
   font: n.font, title: n.title,
-  // Fermat/golden-angle spiral seed positions (#3699): spreading nodes out
-  // before physics runs keeps avoidOverlap from computing near-zero-distance
-  // repulsion that blows the BarnesHut recursion into a stack overflow on large
-  // graphs. `i` is the map index — physics still settles small graphs identically.
-  x: 30 * Math.sqrt(i) * Math.cos(i * 2.4),
-  y: 30 * Math.sqrt(i) * Math.sin(i * 2.4),
+  // Pre-baked positions (#perf L10): when the graph was baked (x/y shipped),
+  // use them verbatim and skip the solver. Otherwise fall back to the
+  // Fermat/golden-angle spiral seed (#3699) so physics still settles.
+  x: (n.x !== undefined && n.x !== null) ? n.x : 30 * Math.sqrt(i) * Math.cos(i * 2.4),
+  y: (n.y !== undefined && n.y !== null) ? n.y : 30 * Math.sqrt(i) * Math.sin(i * 2.4),
   community: n.community, community_name: n.community_name,
   source_file: n.source_file, file_type: n.file_type, degree: n.degree,
   member_count: n.member_count,
@@ -500,7 +511,7 @@ const edgesDS = new vis.DataSet(RAW_EDGES.map((e, i) => ({{
 const container = document.getElementById('graph');
 const network = new vis.Network(container, {{ nodes: nodesDS, edges: edgesDS }}, {{
   physics: {{
-    enabled: true,
+    enabled: {physics_enabled},
     solver: 'forceAtlas2Based',
     forceAtlas2Based: {{
       gravitationalConstant: -60,
@@ -510,7 +521,7 @@ const network = new vis.Network(container, {{ nodes: nodesDS, edges: edgesDS }},
       damping: 0.4,
       avoidOverlap: 0.8,
     }},
-    stabilization: {{ iterations: 200, fit: true }},
+    stabilization: {{ iterations: {stab_iters}, fit: true }},
   }},
   interaction: {{
     hover: true,
@@ -561,10 +572,8 @@ if (themeMQ) {{
 }}
 applyTheme(themePref());
 
-network.once('stabilizationIterationsDone', () => {{
-  network.setOptions({{ physics: {{ enabled: false }} }});
-  _savePositions();
-}});
+{stabilization_handler}
+{baked_fit_js}
 {_ARROW_HOVER_JS if defer_arrows else ''}
 
 function showInfo(nodeId) {{
@@ -963,6 +972,14 @@ def to_html(
         }
         if member_counts:
             node["member_count"] = member_counts.get(cid, len(communities.get(cid, [])))
+        # Pre-baked positions (#perf L10): when the input graph carries stabilized
+        # x/y (e.g. produced by `harness/bake.mjs` or a future `--bake` step), ship
+        # them so the first open skips the on-load solver. Capability is untouched:
+        # nodes/edges/communities/direction/confidence all survive; only the
+        # recompute cost moves offline. Absent -> the spiral seed + solver (as before).
+        if data.get("x") is not None and data.get("y") is not None:
+            node["x"] = data["x"]
+            node["y"] = data["y"]
         # Conditional learning fields — only present for annotated nodes, so
         # un-annotated output keeps the exact pre-feature node dict shape.
         entry = learning_overlay.get(str(node_id)) if learning_overlay else None
@@ -1036,6 +1053,20 @@ def to_html(
     edges_json = _js_safe(vis_edges)
     legend_json = _js_safe(legend_data)
     hyperedges_json = _js_safe(getattr(G, "graph", {}).get("hyperedges", []))
+    # Pre-baked positions (#perf L10): if every node carries stabilized x/y, ship
+    # them and skip the on-load solver entirely. Physics off from the first frame.
+    _baked_all = bool(vis_nodes) and all(
+        n.get("x") is not None and n.get("y") is not None for n in vis_nodes
+    )
+    physics_enabled = "false" if _baked_all else "true"
+    stab_iters = "0" if _baked_all else "200"
+    stabilization_handler = "" if _baked_all else (
+        "network.once('stabilizationIterationsDone', () => {\\n"
+        "  network.setOptions({ physics: { enabled: false } });\\n"
+        "  _savePositions();\\n"
+        "});"
+    )
+    baked_fit_js = "try { network.fit({ animation: false }); } catch (e) {}" if _baked_all else ""
     title = _html.escape(sanitize_label(_html_document_title(output_path)))
     stats = f"{G.number_of_nodes()} nodes &middot; {G.number_of_edges()} edges &middot; {len(communities)} communities"
 
@@ -1087,7 +1118,7 @@ def to_html(
   </div>
   <div id="stats">{stats}</div>
 </div>
-{_html_script(nodes_json, edges_json, legend_json, defer_arrows=G.number_of_edges() > ARROW_DEFER_EDGE_THRESHOLD, lean_gestures=G.number_of_nodes() > LEAN_GESTURE_NODE_THRESHOLD)}
+{_html_script(nodes_json, edges_json, legend_json, defer_arrows=G.number_of_edges() > ARROW_DEFER_EDGE_THRESHOLD, lean_gestures=G.number_of_nodes() > LEAN_GESTURE_NODE_THRESHOLD, baked=_baked_all)}
 {_hyperedge_script(hyperedges_json)}
 </body>
 </html>"""

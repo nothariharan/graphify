@@ -147,26 +147,32 @@ physics off), (3) keep capability. Aesthetics levers (straight/discrete) optiona
     measurement in this lab). Verified: exclusion holds (a second agent blocks), stale locks are
     stolen after 20 min, `--force` steals now. Fixed a real bug found while testing: the steal
     path detected a dead holder but never removed the file, so it waited forever.
-16. [ACTIVE 2026-10-19] Three lanes dispatched as child agents (model-pinned
-    `opencode/deepseek-v4.1-flash-free`), each pointed at `AGENTS.md` as its binding contract,
-    lane-prefixed filenames, and told not to touch `graphify/exporters/html.py`:
-    - **L9** node-draw batching — taskId `…graphify-perf-L9-r1`.
-    - **L10** instant first open (bake the layout at export) — taskId `…graphify-perf-L10-r1`.
-    - **L11** viewer experience (focus/fly-to/HUD/legend) — taskId `…graphify-perf-L11-r1`.
-    The loop owner integrates a winner only after its lane doc + CSV + parity proof exist.
+16. [ACTIVE 2026-10-19] Lanes dispatched. The first attempt (r1) launched all three at once
+    and every one of them failed with `Rate limit exceeded` - three agents on one pinned model
+    at once is too much for the provider. Retrying serially:
+    - **L9** node-draw batching — r1 failed (rate limit); r2 dispatched alone, taskId
+      `…graphify-perf-L9-r2`, status running. L10 and L11 follow only after L9 finishes.
+    - **L10** instant first open (bake the layout at export) — DONE 2026-10-19. Exporter now
+      consumes pre-baked x/y: physics off + no stabilization pass + network.fit when every node
+      carries positions; spiral seed + solver otherwise (byte-identical to before). Verified by
+      _l10test.py/_l10test2.py (baked path: positions survive, physics off, no stab handler;
+      unbaked path: physics on, handler present). Load win (-74% on rsl, -73% gsoc agg) already
+      measured in L2 via bake.mjs. Remaining piece: a `--bake` CLI flag to populate positions
+      (tracked as follow-up; bake.mjs already works). Lane doc: lanes/L10-first-open.md.
+    - **L11** viewer experience (focus/fly-to/HUD/legend) — queued (r1 failed).
+    Every agent uses lane-prefixed filenames and must not touch `graphify/exporters/html.py`;
+    the loop owner integrates a winner only after its lane doc + CSV + parity proof exist.
 
 ## Tick status
-2026-10-19 (restructure + lanes L9-L11): the felt-smoothness work was committed (`3a09ba73`)
-and the loop moved into its own worktree (`perf/graph-smoothness`), so the user's checkout is
-clean and any later agent can pick this up from a branch instead of a dirty tree. `perf-lab/`
-is now tracked and `AGENTS.md` is the handoff protocol: hard rules, the measurement contract,
-the evidence registry, the lane board, the traps, and a first-10-minutes checklist. Every
-measurement now goes through `harness/bench_lock.py` (audited in `results/bench-runs.log`), so
-parallel agents cannot silently corrupt each other's numbers — verified by blocking a second
-agent while one held the lock. The 30-minute loop is armed in this thread. Three lanes are
-running as child agents: L9 (nodes are now the frame floor), L10 (instant first open), L11
-(viewer experience). Next tick: integrate whichever lane has a measured, parity-proved winner
-into `graphify/exporters/html.py`, or take the next STATE item if the lanes are still running.
+2026-10-19 (tick: L9 closed, L10 landed): L9 (node-draw) closes with no adoptable lever -
+shadow already off in values, DPR already disproven, fill grouping has no clean seam in vis's
+node draw (208 distinct (colour,radius) pairs, geometry-bound). Lane doc: lanes/L9-node-draw.md.
+L10 (instant first open) landed in the exporter: to_html now consumes pre-baked x/y (physics
+off + no stabilization + fit when all nodes carry positions; spiral seed + solver otherwise),
+verified by _l10test.py/_l10test2.py, 20/20 tests pass. Load win (-74% rsl) already measured
+in L2. Remaining: L11 (viewer UX) and a `--bake` CLI flag to populate positions. Next tick:
+L11 work (click-to-focus, search fly-to, fps HUD, legend isolate) on a variant of
+base-ours-v7.html, then measure gesture impact and write lanes/L11-viewer-ux.md.
 
 2026-10-17 tick 3 (curve fidelity): the batch shipped in tick 2 drew straight lines during a
 gesture, which is cheap but is a different picture from the resting graph. `probe_motion_pixels.mjs`
