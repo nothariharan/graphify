@@ -44,7 +44,7 @@ behave worse is a regression.
 
 ## 3. Where things stand (shipped in the exporter, committed as `3a09ba73`)
 
-`graphify/exporters/html.py` — sha256 `3306ea513a4f05a125e38c35028f9c0535d052daeb947300d2937c119dff1e76`
+`graphify/exporters/html.py` — sha256 `a796af5e929ad8da46140f95050ea6306c43d7564fff037a6365c928c1c6f978` (commit 716c421e: added pre-baked position consumption for L10)
 
 | lever | what it does | gate |
 |---|---|---|
