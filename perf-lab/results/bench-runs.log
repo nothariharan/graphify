@@ -1,0 +1,2 @@
+2026-10-19 12:30:15+0530	0.1s	exit=0	bench_lock self-test (does it refuse to run without the lock?)	python -c print('locked run ok')
+2026-10-19 12:47:46+0530	25.2s	exit=0	agent-A: 25s measurement	python -c import time; time.sleep(25); print('A finished its measurement')

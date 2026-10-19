@@ -14,6 +14,312 @@ from graphify.security import sanitize_label
 MAX_NODES_FOR_VIZ = 5_000
 _HTML_STALE_MARKER = ".graph.html.stale"
 
+# Dense graphs spend most of every canvas redraw on per-edge arrowheads. Above
+# this many edges the exporter stops drawing an arrowhead on every edge every
+# frame and reveals them on hover instead (edge hover, or node hover for all
+# incident edges). Direction is never lost - it moves from "always drawn" to
+# "drawn on hover" only for graphs where drawing them is what makes pan/zoom lag
+# (measured: rsl/continuum/gsoc-aggregate redraw -63%..-67%). Below the
+# threshold the render is byte-identical to before. (#perf)
+ARROW_DEFER_EDGE_THRESHOLD = 1_500
+
+# Above this many nodes, a drag/pan gesture drops node border strokes (cosmetic) for
+# the length of the gesture and restores them on release. Measured on rsl (1886 nodes,
+# same machine, interleaved A/B): node drag 15.7 -> 60.9 fps, pan 15.0 -> 64.8 fps,
+# frames over 33ms 119/120 -> 5/120. ~1900 per-frame ctx.stroke() calls for 1.5px
+# borders were choking the canvas raster pipeline - it is the single biggest cost in a
+# drag frame, bigger than the edges. Below the threshold the render is byte-identical.
+LEAN_GESTURE_NODE_THRESHOLD = 800
+
+# Emitted only when arrowheads are deferred. Single braces: this string is
+# interpolated verbatim into the script (not itself an f-string).
+_ARROW_HOVER_JS = """
+// Deferred arrowheads (#perf). Direction is shown, not lost: hover an edge, or a
+// node (all its incident edges), to see the arrowheads.
+//
+// Two rules keep this off the hot path (measured with harness/profile_drag.mjs):
+//   1. BATCH. Every edgesDS.update() makes vis run _updateVisibleIndices() plus
+//      _updateValueRange() over ALL nodes and ALL edges and request a redraw. The
+//      earlier per-edge update loop did that once per arrow flipped, so hovering a
+//      hub node fired dozens of full body recomputes; a node drag fell to 17.8fps
+//      vs 44fps with hover off. One batched update per hover change instead.
+//   2. NO CHURN DURING A DRAG. Hover events fired mid-pull are noise; they made the
+//      graph feel like it was fighting the pointer. Defer, then resync once on dragEnd.
+const _arrowOn = new Set();
+let _hoverNode = null, _hoverEdge = null, _dragging = false;
+function _syncArrows() {
+  const want = new Set();
+  if (_hoverEdge !== null) want.add(_hoverEdge);
+  if (_hoverNode !== null) {
+    const inc = network.getConnectedEdges(_hoverNode);
+    for (const id of inc) want.add(id);
+  }
+  const upd = [];
+  for (const id of _arrowOn) {
+    if (!want.has(id)) { _arrowOn.delete(id); upd.push({ id: id, arrows: { to: { enabled: false } } }); }
+  }
+  for (const id of want) {
+    if (!_arrowOn.has(id)) { _arrowOn.add(id); upd.push({ id: id, arrows: { to: { enabled: true, scaleFactor: 0.5 } } }); }
+  }
+  if (!upd.length) return;
+  try { edgesDS.update(upd); } catch (e) {}
+}
+network.on('hoverNode', function (p) { _hoverNode = p.node; if (!_dragging) _syncArrows(); });
+network.on('blurNode', function () { _hoverNode = null; if (!_dragging) _syncArrows(); });
+network.on('hoverEdge', function (p) { _hoverEdge = p.edge; if (!_dragging) _syncArrows(); });
+network.on('blurEdge', function () { _hoverEdge = null; if (!_dragging) _syncArrows(); });
+network.on('dragStart', function () { _dragging = true; });
+network.on('dragEnd', function () { _dragging = false; _syncArrows(); });
+"""
+
+# Always emitted. Caches this graph's stabilized layout so a re-opened graph
+# skips the on-load solver (measured load -73%). The cached x/y ARE this graph's
+# own stabilized positions, so layout and every capability are identical; only
+# the recompute cost is removed. Best-effort: localStorage may throw (file://,
+# private mode) - then behavior is exactly as before.
+_POSITION_CACHE_JS = """
+// Stabilized-layout cache (#perf).
+const POSK = 'graphify-pos:' + RAW_NODES.length + ':'
+  + String(RAW_NODES.length ? RAW_NODES[0].id : '') + ':'
+  + String(RAW_NODES.length ? RAW_NODES[RAW_NODES.length - 1].id : '');
+function _savePositions() {
+  try {
+    const p = network.getPositions();
+    const out = {};
+    for (const id in p) { out[id] = [Math.round(p[id].x * 100) / 100, Math.round(p[id].y * 100) / 100]; }
+    localStorage.setItem(POSK, JSON.stringify(out));
+  } catch (e) {}
+}
+(function _restorePositions() {
+  let raw = null;
+  try { raw = localStorage.getItem(POSK); } catch (e) { return; }
+  if (!raw) return;
+  let pos = null;
+  try { pos = JSON.parse(raw); } catch (e) { return; }
+  if (!pos || typeof pos !== 'object') return;
+  const upd = [];
+  for (const n of RAW_NODES) { const p = pos[n.id]; if (p) upd.push({ id: n.id, x: p[0], y: p[1] }); }
+  if (upd.length < RAW_NODES.length) return;  // stale/partial -> re-solve
+  try {
+    network.setOptions({ physics: { enabled: false } });
+    nodesDS.update(upd);
+    network.fit({ animation: false });
+  } catch (e) {}
+})();
+"""
+
+# Emitted only for large graphs (see LEAN_GESTURE_NODE_THRESHOLD). Plain string, single
+# braces, interpolated verbatim.
+_LEAN_GESTURE_JS = """
+// Lean draw during gestures (#perf): borders off the nodes, one stroke for the edges.
+//
+// Nodes: the border costs one ctx.stroke() per node per frame (~1900 strokes on rsl) and
+// the raster pipeline cannot keep up, so a drag settled at ~15fps. Dropping borders for
+// the duration of the gesture takes that past 40fps and cuts stalled frames (over 33ms)
+// from 89/90 to a handful. The border is cosmetic and returns the instant the pointer is
+// released.
+//
+// Every element is still drawn. Edges used to simply vanish while the view moved, first
+// because the shipped build set hideEdgesOnDrag/hideEdgesOnZoom, and then because hiding
+// them was the only way to stay smooth: vis issues one ctx.stroke() per edge per frame
+// (3876 on rsl, ~30ms) and no option change removes that - the draw path fills its values
+// in from the instance options during the draw, so writing edge.options.smooth/width
+// mid-gesture changes the data and nothing on screen. What does work is taking over the
+// edge pass for the length of the gesture and stroking each (colour, dashes, width) group
+// once. On rsl 3876 strokes collapse to ~20 for the same pixels, and the endpoints are
+// read live each frame (edgeType.fromPoint IS the node object), so edges still follow a
+// node being dragged.
+//
+// Both levers are written straight onto the instances rather than through
+// network.setOptions(): setOptions re-applies the global options but also costs a full
+// synchronous redraw (measured: ~80ms on rsl, ~200ms on a 2290-node aggregate, 670-2000ms
+// on a 9142-node graph), which landed as one hitch at dragStart and another at dragEnd.
+// Mutating the instances costs nothing and the drag's own next frame picks it up. The
+// original border width of every node is remembered because learning-status nodes carry a
+// 3px ring and must get it back, not 1.5px.
+const _BORDER_FULL = 1.5, _BORDER_LEAN = 0;
+let _lean = false, _draggingNow = false, _zoomTimer = null, _border0 = null;
+
+// Batched edge pass. vis draws each edge by calling edgeType.drawLine(ctx, values, ...);
+// for the duration of a gesture that call is replaced by one draw of every edge, grouped
+// by the colour/dash/width it would have been drawn with, so the reused ctx state is
+// identical. The replacement is deleted on release, which restores the prototype method.
+const _EDGE_BATCH = (function () {
+  let _installed = false, _drawn = false, _groups = null, _ctx = null, _errors = 0;
+
+  function _dashOf(t) {
+    const d = t.dashes;
+    if (d === false || d === null || d === undefined) return null;
+    return d === true ? [5, 5] : d;
+  }
+
+  function _scale() {
+    try { return network.body.view.scale || network.getScale(); } catch (e) { return 1; }
+  }
+
+  function _build() {
+    const body = network.body;
+    const es = body && body.edges;
+    if (!es) return false;
+    if (!_ctx) {
+      _ctx = (body.renderer && body.renderer.ctx) || (function () {
+        try { return document.createElement('canvas').getContext('2d'); } catch (e) { return null; }
+      })();
+    }
+    const map = new Map();
+    for (const id in es) {
+      const e = es[id];
+      if (!e || !e.connected || !e.edgeType) continue;
+      let t = null;
+      try { t = e.getFormattingValues(); } catch (err) { continue; }
+      if (!t || t.hidden) continue;
+      let col = null;
+      try { col = e.edgeType.getColor(_ctx, t); } catch (err) { continue; }
+      if (typeof col !== 'string') continue;  // gradient / exotic: leave it to vis
+      const dash = _dashOf(t);
+      const baseW = (e.options && typeof e.options.width === 'number') ? e.options.width : t.width;
+      const key = col + '|' + (dash ? dash.join(',') : '') + '|' + baseW;
+      let grp = map.get(key);
+      if (!grp) map.set(key, grp = { col: col, baseW: baseW, dash: dash, ets: [] });
+      grp.ets.push(e.edgeType);
+    }
+    _groups = [];
+    for (const grp of map.values()) _groups.push(grp);
+    return _groups.length > 0;
+  }
+
+  // The exact curve vis draws at rest for `smooth: {type: 'continuous'}`: a quadratic
+  // through the same via point BezierEdgeDynamic._getViaCoordinates computes (offset from
+  // `from` by roundness * the dominant extent, signed toward `to`, clamped into the
+  // segment's box). Drawing straight lines in the batch instead is faster still, but it is
+  // visibly a different graph in motion: a frame-by-frame pixel diff against the resting
+  // frame shows 82-100% of painted pixels changing with straight lines versus 1.1-1.8%
+  // with the curve. Anything that is not a continuous smooth edge falls back to a line.
+  function _curveTo(g, et) {
+    const o = et.options && et.options.smooth;
+    if (!o || o.enabled === false || o.type !== 'continuous') { g.lineTo(et.toPoint.x, et.toPoint.y); return; }
+    const fx = et.from.x, fy = et.from.y, tx = et.to.x, ty = et.to.y;
+    const e = o.roundness, C = Math.abs(fx - tx), I = Math.abs(fy - ty);
+    let a = (C <= I) ? e * I : e * C;
+    let b = a;
+    if (fx > tx) a = -a;
+    if (fy >= ty) b = -b;
+    let vx = fx + a, vy = fy + b;
+    if (C <= I) vx = (fx <= tx) ? (tx < vx ? tx : vx) : (tx > vx ? tx : vx);
+    else vy = (fy >= ty) ? (ty > vy ? ty : vy) : (ty < vy ? ty : vy);
+    g.quadraticCurveTo(vx, vy, et.toPoint.x, et.toPoint.y);
+  }
+
+  function _drawAll(g) {
+    const groups = _groups;
+    if (!groups || !g) return;
+    const floor = 0.3 / _scale();
+    for (let i = 0; i < groups.length; i++) {
+      const grp = groups[i];
+      const ets = grp.ets;
+      g.strokeStyle = grp.col;
+      // vis sets lineWidth to max(width, 0.3/scale) on every draw; the floor moves with
+      // the zoom, so it has to be re-derived per frame rather than baked in at dragStart.
+      g.lineWidth = Math.max(grp.baseW, floor);
+      if (grp.dash) { g.save(); g.lineCap = 'round'; g.setLineDash(grp.dash); }
+      g.beginPath();
+      for (let j = 0; j < ets.length; j++) {
+        const et = ets[j];
+        g.moveTo(et.fromPoint.x, et.fromPoint.y);
+        _curveTo(g, et);
+      }
+      g.stroke();
+      if (grp.dash) g.restore();
+    }
+  }
+
+  function _set(on) {
+    if (on) {
+      if (_installed || !_build()) return;
+      const es = network.body.edges;
+      for (const id in es) {
+        const et = es[id] && es[id].edgeType;
+        if (!et || et.__leanBatch) continue;
+        const orig = et.drawLine;
+        et.__leanBatch = orig;
+        et.drawLine = function (ctx, values, sel, hov, via) {
+          if (_drawn) return;          // the other 3875 edges are already on the canvas
+          _drawn = true;
+          try { _drawAll(ctx); return; } catch (err) {
+            _errors++;
+            if (_errors > 2) { _set(false); }
+          }
+          orig.call(this, ctx, values, sel, hov, via);
+        };
+      }
+      _installed = true;
+    } else if (_installed) {
+      try {
+        const es = network.body && network.body.edges;
+        for (const id in es) {
+          const et = es[id] && es[id].edgeType;
+          if (!et || !et.__leanBatch) continue;
+          delete et.drawLine;          // back to the prototype implementation
+          delete et.__leanBatch;
+        }
+      } catch (e) {}
+      _installed = false;
+      _groups = null;
+      _drawn = false;
+    }
+  }
+
+  return { set: _set, frame: function () { _drawn = false; } };
+})();
+
+function _setLean(on, redraw) {
+  if (on === _lean) return;
+  _lean = on;
+  _EDGE_BATCH.set(on);
+  let applied = false;
+  try {
+    const nodes = network.body && network.body.nodes;
+    if (nodes) {
+      if (!_border0) _border0 = {};
+      for (const id in nodes) {
+        const n = nodes[id];
+        if (!n || !n.options) continue;
+        if (on) {
+          if (!(id in _border0)) _border0[id] = n.options.borderWidth;
+          n.options.borderWidth = _BORDER_LEAN;
+        } else {
+          const w = _border0[id];
+          n.options.borderWidth = (w === undefined) ? _BORDER_FULL : w;
+        }
+        applied = true;
+      }
+    }
+  } catch (e) { applied = false; }
+  if (!applied) {
+    // Fallback for a vis build without network.body.nodes: global option, plus a
+    // redraw on restore the way that path always needed.
+    try { network.setOptions({ nodes: { borderWidth: on ? _BORDER_LEAN : _BORDER_FULL } }); } catch (e) {}
+    return;
+  }
+  // A drag/zoom redraws itself, so leaning needs no redraw; restoring does, because vis
+  // does not redraw when the pointer is released (measured: zero canvas strokes in the
+  // 20 frames after pointerup unless something forces one).
+  if (redraw) { try { network.redraw(); } catch (e) {} }
+}
+// One batched edge pass per frame: afterDrawing fires once per vis draw.
+network.on('afterDrawing', function () { _EDGE_BATCH.frame(); });
+network.on('dragStart', function () { _draggingNow = true; _setLean(true); });
+network.on('dragEnd', function () { _draggingNow = false; _setLean(false, true); });
+// vis emits no zoom start/end, so lean for the duration of the zoom and restore once
+// the gesture goes quiet (180ms). This took rsl's zoom from 14.2 to ~50fps.
+network.on('zoom', function () {
+  _setLean(true);
+  clearTimeout(_zoomTimer);
+  _zoomTimer = setTimeout(function () { if (!_draggingNow) _setLean(false, true); }, 180);
+});
+"""
+
+
 def _viz_node_limit() -> int:
     """Return the effective viz node limit, honoring GRAPHIFY_VIZ_NODE_LIMIT env var.
 
@@ -150,7 +456,12 @@ network.on('afterDrawing', function(ctx) {{
 }});
 </script>"""
 
-def _html_script(nodes_json: str, edges_json: str, legend_json: str) -> str:
+def _html_script(nodes_json: str, edges_json: str, legend_json: str,
+                 defer_arrows: bool = False,
+                 lean_gestures: bool = False) -> str:
+    # Arrowheads are deferred to hover only on dense graphs (see
+    # ARROW_DEFER_EDGE_THRESHOLD); otherwise emitted exactly as before.
+    _arrow_default = "false" if defer_arrows else "true, scaleFactor: 0.5"
     return f"""<script>
 const RAW_NODES = {nodes_json};
 const RAW_EDGES = {edges_json};
@@ -183,7 +494,7 @@ const edgesDS = new vis.DataSet(RAW_EDGES.map((e, i) => ({{
   dashes: e.dashes,
   width: e.width,
   color: e.color,
-  arrows: {{ to: {{ enabled: true, scaleFactor: 0.5 }} }},
+  arrows: {{ to: {{ enabled: {_arrow_default} }} }},
 }})));
 
 const container = document.getElementById('graph');
@@ -204,13 +515,14 @@ const network = new vis.Network(container, {{ nodes: nodesDS, edges: edgesDS }},
   interaction: {{
     hover: true,
     tooltipDelay: 100,
-    hideEdgesOnDrag: true,
     navigationButtons: false,
     keyboard: false,
   }},
   nodes: {{ shape: 'dot', borderWidth: 1.5 }},
   edges: {{ smooth: {{ type: 'continuous', roundness: 0.2 }}, selectionWidth: 3 }},
 }});
+{_POSITION_CACHE_JS}
+{_LEAN_GESTURE_JS if lean_gestures else ''}
 
 // Theme toggle (#3894): Light / Dark / System, persisted in localStorage.
 const THEME_KEY = 'graphify-theme';
@@ -251,7 +563,9 @@ applyTheme(themePref());
 
 network.once('stabilizationIterationsDone', () => {{
   network.setOptions({{ physics: {{ enabled: false }} }});
+  _savePositions();
 }});
+{_ARROW_HOVER_JS if defer_arrows else ''}
 
 function showInfo(nodeId) {{
   const n = nodesDS.get(nodeId);
@@ -732,7 +1046,8 @@ def to_html(
 <title>graphify - {title}</title>
 <script src="https://unpkg.com/vis-network@9.1.6/standalone/umd/vis-network.min.js"
         integrity="sha384-Ux6phic9PEHJ38YtrijhkzyJ8yQlH8i/+buBR8s3mAZOJrP1gwyvAcIYl3GWtpX1"
-        crossorigin="anonymous"></script>
+        crossorigin="anonymous"
+        onerror="var s=document.createElement('script');s.src='vis-network.min.js';document.head.appendChild(s);"></script>
 {_html_styles()}
 <script id="graphify-theme-init">
 // Apply the saved theme before first paint (#3894). No saved choice keeps the
@@ -772,7 +1087,7 @@ def to_html(
   </div>
   <div id="stats">{stats}</div>
 </div>
-{_html_script(nodes_json, edges_json, legend_json)}
+{_html_script(nodes_json, edges_json, legend_json, defer_arrows=G.number_of_edges() > ARROW_DEFER_EDGE_THRESHOLD, lean_gestures=G.number_of_nodes() > LEAN_GESTURE_NODE_THRESHOLD)}
 {_hyperedge_script(hyperedges_json)}
 </body>
 </html>"""

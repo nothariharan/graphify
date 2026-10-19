@@ -1,0 +1,26 @@
+# drag latency profile - V13-arrows-only (rsl)  2026-10-17T05:17:55
+file: variants/rsl__v13-hover-arrows.html   viewport 1280x800   steps 150   radius 150   (in-page, 1 pointermove per rAF)
+
+## node (dragging events: 150, wall 8742ms for 150 steps)
+  frame deltas ms : n=151 fps=17.3 p50=55.7 p95=69.5 p99=76.2 worst=97.3 sd=8.42
+  jank            : >33ms 150   >50ms 128   (of 151)
+  vis draw ms     : n=152 p50=15.2 p95=18.9 worst=38.8  -> 27% of gesture cpu-ish
+  cpu total       : 9184.3 ms
+  by file:
+      87.2%    8011.1ms  (inline)
+      12.8%    1173.2ms  vis-network.min.js
+  top self-time:
+      61.4%    5640.4ms  (idle)  [(inline):-1]
+      11.2%    1032.5ms  (program)  [(inline):-1]
+      10.7%     984.3ms  value  [vis-network.min.js:31]
+       3.2%     292.7ms  save  [(inline):-1]
+       3.2%     291.9ms  stroke  [(inline):-1]
+       2.8%     259.6ms  restore  [(inline):-1]
+       2.5%       228ms  (garbage collector)  [(inline):-1]
+       1.4%       128ms  fill  [(inline):-1]
+       0.7%      67.6ms  drawExternalLabel  [vis-network.min.js:31]
+       0.5%      48.2ms  drawExternalLabels  [vis-network.min.js:31]
+       0.3%      31.6ms  closePath  [(inline):-1]
+       0.3%        26ms  arc  [(inline):-1]
+       0.2%      17.2ms  beginPath  [(inline):-1]
+       0.2%      15.2ms  Cv  [vis-network.min.js:25]

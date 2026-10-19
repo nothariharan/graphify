@@ -1,0 +1,59 @@
+# drag latency profile - v30-ours (rsl)  2026-10-17T05:00:47
+file: variants/rsl__v30-newdefault.html   viewport 1280x800   steps 80   radius 140
+
+## pan (dragging events: 79, wall 9705ms)
+  frame deltas ms : n=605 fps=59.7 p50=7 p95=62.5 p99=69.5 worst=312.4 sd=23.22
+  jank            : >33ms 84   >50ms 74   (of 605)
+  vis draw ms     : n=80 p50=18.1 p95=23.9 worst=56  -> 259% of the median frame
+  cpu total       : 10117.9 ms
+  by file:
+      91.4%    9245.7ms  (inline)
+       8.6%     872.2ms  vis-network.min.js
+  top self-time:
+      76.1%    7694.9ms  (idle)  [(inline):-1]
+       7.6%     768.8ms  value  [vis-network.min.js:31]
+       7.1%     714.7ms  (program)  [(inline):-1]
+         2%     201.7ms  save  [(inline):-1]
+         2%       198ms  stroke  [(inline):-1]
+       1.4%       142ms  restore  [(inline):-1]
+       1.2%     121.9ms  fill  [(inline):-1]
+       0.8%      77.5ms  (garbage collector)  [(inline):-1]
+       0.3%        27ms  drawExternalLabel  [vis-network.min.js:31]
+       0.2%      17.9ms  UA  [vis-network.min.js:25]
+       0.2%      15.5ms  (anonymous)  [(inline):-1]
+       0.2%      15.5ms  drawExternalLabels  [vis-network.min.js:31]
+       0.1%      14.1ms  arc  [(inline):-1]
+       0.1%      12.5ms  requestAnimationFrame  [(inline):-1]
+       0.1%      11.5ms  beginPath  [(inline):-1]
+       0.1%      10.8ms  Cv  [vis-network.min.js:25]
+       0.1%       9.2ms  closePath  [(inline):-1]
+       0.1%       7.7ms  t.emit  [vis-network.min.js:31]
+
+## node (dragging events: 79, wall 20408ms)
+  frame deltas ms : n=370 fps=17.8 p50=7.2 p95=159.6 p99=187.4 worst=2909.5 sd=215.83
+  jank            : >33ms 144   >50ms 140   (of 370)
+  vis draw ms     : n=610 p50=16.5 p95=21.4 worst=71.1  -> 229% of the median frame
+  cpu total       : 20810.2 ms
+  by file:
+      60.3%   12552.9ms  (inline)
+      39.7%      8253ms  vis-network.min.js
+         0%       4.3ms  rsl__v30-newdefault.html
+  top self-time:
+      26.4%    5484.6ms  value  [vis-network.min.js:31]
+      24.5%    5091.4ms  (idle)  [(inline):-1]
+       7.6%    1582.7ms  stroke  [(inline):-1]
+       6.6%      1380ms  restore  [(inline):-1]
+       6.6%    1374.2ms  save  [(inline):-1]
+         5%    1042.4ms  (program)  [(inline):-1]
+       3.8%     786.5ms  fill  [(inline):-1]
+       3.1%     655.1ms  Lm  [vis-network.min.js:31]
+       3.1%     637.2ms  HZ._updateVisibleIndices  [vis-network.min.js:31]
+       2.7%     556.2ms  (garbage collector)  [(inline):-1]
+       1.8%     379.1ms  drawExternalLabel  [vis-network.min.js:31]
+       1.7%       359ms  (anonymous)  [vis-network.min.js:31]
+       1.6%     334.8ms  clearRect  [(inline):-1]
+       1.1%     220.7ms  HZ._updateValueRange  [vis-network.min.js:31]
+       0.9%     196.3ms  drawExternalLabels  [vis-network.min.js:31]
+       0.5%     109.8ms  arc  [(inline):-1]
+       0.5%      93.8ms  UA  [vis-network.min.js:25]
+       0.5%      93.6ms  closePath  [(inline):-1]

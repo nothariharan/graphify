@@ -1,0 +1,50 @@
+# drag latency profile - B-ours-prefix (rsl)  2026-10-17T05:10:44
+file: variants/base-ours-prefix.html   viewport 1280x800   steps 150   radius 150   (in-page, 1 pointermove per rAF)
+
+## pan (dragging events: 150, wall 10266ms for 150 steps)
+  frame deltas ms : n=151 fps=14.7 p50=69.4 p95=77.3 p99=118.2 worst=132 sd=12.47
+  jank            : >33ms 148   >50ms 144   (of 151)
+  vis draw ms     : n=150 p50=15.8 p95=21 worst=39.7  -> 23% of gesture cpu-ish
+  cpu total       : 10673.8 ms
+  by file:
+      89.3%      9531ms  (inline)
+      10.7%    1142.8ms  vis-network.min.js
+  top self-time:
+      66.2%    7067.7ms  (idle)  [(inline):-1]
+       9.3%     989.2ms  value  [vis-network.min.js:31]
+       8.4%     901.4ms  (program)  [(inline):-1]
+         4%     424.7ms  stroke  [(inline):-1]
+       3.3%       348ms  save  [(inline):-1]
+       2.8%     295.4ms  restore  [(inline):-1]
+       1.9%     199.6ms  fill  [(inline):-1]
+       1.6%     172.8ms  (garbage collector)  [(inline):-1]
+       0.4%      45.8ms  drawExternalLabel  [vis-network.min.js:31]
+       0.3%      28.6ms  drawExternalLabels  [vis-network.min.js:31]
+       0.2%      26.4ms  closePath  [(inline):-1]
+       0.2%      17.7ms  beginPath  [(inline):-1]
+       0.2%      16.5ms  arc  [(inline):-1]
+       0.2%      16.1ms  loop  [(inline):12]
+
+## node (dragging events: 150, wall 9845ms for 150 steps)
+  frame deltas ms : n=151 fps=15.3 p50=63.7 p95=76.6 p99=97.4 worst=117.9 sd=11.42
+  jank            : >33ms 149   >50ms 142   (of 151)
+  vis draw ms     : n=150 p50=14.7 p95=23.3 worst=45.8  -> 23% of gesture cpu-ish
+  cpu total       : 10000.4 ms
+  by file:
+      87.3%    8734.1ms  (inline)
+      12.7%    1266.3ms  vis-network.min.js
+  top self-time:
+      66.5%    6651.7ms  (idle)  [(inline):-1]
+      10.7%    1069.7ms  value  [vis-network.min.js:31]
+       6.5%     648.6ms  (program)  [(inline):-1]
+       3.7%     370.8ms  save  [(inline):-1]
+       3.2%     319.4ms  stroke  [(inline):-1]
+       2.9%     285.9ms  restore  [(inline):-1]
+       1.9%     190.6ms  (garbage collector)  [(inline):-1]
+       1.5%     149.4ms  fill  [(inline):-1]
+       0.9%      93.4ms  drawExternalLabel  [vis-network.min.js:31]
+       0.4%      43.4ms  drawExternalLabels  [vis-network.min.js:31]
+       0.2%      17.6ms  getContext  [(inline):-1]
+       0.2%      17.6ms  Cv  [vis-network.min.js:25]
+       0.1%      14.3ms  beginPath  [(inline):-1]
+       0.1%      13.9ms  closePath  [(inline):-1]

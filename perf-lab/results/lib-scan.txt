@@ -1,0 +1,48 @@
+== npm ==
+package                  version           week  description
+sigma                    4.0.3           474587  A JavaScript library aimed at visualizing graphs of thousands of nodes
+graphology               0.26.0         1649638  A robust and multipurpose Graph object for JavaScript.
+@cosmograph/cosmos       3.4.1             6951  GPU-based force graph layout and rendering
+cosmograph                                       HTTP Error 404: Not Found
+@antv/g6                 5.1.1           236772  A Graph Visualization Framework in JavaScript
+cytoscape                3.34.4        18734489  Graph theory (a.k.a. network) library for analysis and visualisation
+force-graph              1.52.0          991319  2D force-directed graph rendered on HTML5 canvas
+3d-force-graph           1.80.1          430342  UI component for a 3D force-directed graph using ThreeJS and d3-force-
+react-force-graph-2d     1.29.2          878414  React component for 2D force directed graphs
+vis-network              10.1.2          882202  A dynamic, browser-based visualization library.
+pixi.js                  8.22.0         1452916  <p align="center">   <a href="https://pixijs.com" target="_blank" rel=
+echarts                  6.1.0          6393161  Apache ECharts is a powerful, interactive charting and data visualizat
+d3-force                 3.0.0         25800555  Force-directed graph layout using velocity Verlet integration.
+regl                     2.1.1           974769  regl is a fast functional WebGL framework.
+ngraph.forcelayout       3.3.1           425102  Force directed graph drawing layout
+
+== github ==
+repo                                 stars  issues pushed       lic        archived  description
+jacomyal/sigma.js                    12191       7 2026-10-16   MIT        False     A JavaScript library aimed at visualizing graphs of thousand
+cosmograph-org/cosmograph          ERROR HTTP Error 404: Not Found
+antvis/G6                            12335     335 2026-10-16   MIT        False     ♾ A Graph Visualization Framework in JavaScript.
+vasturiano/force-graph                2143     151 2026-09-28   MIT        False     Force-directed graph rendered on HTML5 canvas
+vasturiano/3d-force-graph             6461     250 2026-09-29   MIT        False     3D force-directed graph component using ThreeJS/WebGL
+cytoscape/cytoscape.js               11237      20 2026-10-15   MIT        False     Graph theory (network) library for visualisation and analysi
+graphology/graphology                 1762      90 2026-09-02   MIT        False     A robust & multipurpose Graph object for JavaScript & TypeSc
+pixijs/pixijs                        48403     393 2026-10-14   MIT        False     The HTML5 Creation Engine: Create beautiful digital content 
+FBarrca/obsidian-extended-graph    ERROR HTTP Error 404: Not Found
+
+== github search: obsidian graph webgl ==
+-- obsidian+graph+webgl
+   Prompt-Surfer/obsidian-jarvis-ui              64  3D WebGL vault graph for Obsidian with Iron Man/Jarvis aesth
+   moonskorch/ReverySky-Plugin                   23  Obsidian plugin rendering the vault graph as an interactive 
+   n23eos/advanced_graph_view                    13  Advanced graph view for Obsidian — 3D visualization, cluster
+   chntnm/akasha                                 10  Akasha - 3D WebGL knowledge-graph explorer for Obsidian vaul
+   DerKezorm/nexlore                              8  Notes as Markdown files in the browser, with a graph you can
+   glebis/obsidian-4d-graph-explorer              3  Explore your Obsidian knowledge graph in four dimensions wit
+   cardozodiegob/obsidian-solar-graph             1  A 3D graph view for Obsidian built like a solar system: note
+   miumiuliaison-wq/Saturn-Graph                  1  A directory-driven 3D knowledge cosmos for Obsidian: nested 
+-- graph+view+webgl+wasm
+-- large+graph+visualization+webgl
+   nblintao/ParaGraphL                          118  WebGL-powered Parallel Large-scale Graph Layout Visualizatio
+   HelikarLab/ccNetViz                           94  JavaScript library for visualization of large-scale network 
+   poloclub/argo-graph                           19  Cross-platform Interactive Large Graph Visualization tool us
+   nashira/grapheen                               7  visualize large graphs in webgl
+   HarryLuUMN/LargeGraphs.jl                      2  A WebGL-based Library for Large Graph Visualization in Julia
+   DavidTichy/ccNetViz                            0  JavaScript library for visualization of large-scale network 

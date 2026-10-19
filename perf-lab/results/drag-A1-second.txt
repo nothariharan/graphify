@@ -1,0 +1,26 @@
+# drag latency profile - A1-second (rsl)  2026-10-17T05:16:45
+file: variants/base-rsl.html   viewport 1280x800   steps 150   radius 150   (in-page, 1 pointermove per rAF)
+
+## node (dragging events: 150, wall 9969ms for 150 steps)
+  frame deltas ms : n=151 fps=15.2 p50=62.6 p95=76.4 p99=145.8 worst=194.4 sd=15.15
+  jank            : >33ms 149   >50ms 148   (of 151)
+  vis draw ms     : n=152 p50=14.9 p95=19.6 worst=118.9  -> 24% of gesture cpu-ish
+  cpu total       : 10455.3 ms
+  by file:
+      86.6%    9057.6ms  (inline)
+      13.4%    1397.7ms  vis-network.min.js
+  top self-time:
+      64.5%    6748.1ms  (idle)  [(inline):-1]
+      11.5%    1203.1ms  value  [vis-network.min.js:31]
+       8.1%     851.6ms  (program)  [(inline):-1]
+       3.6%     373.6ms  stroke  [(inline):-1]
+       2.9%     303.7ms  restore  [(inline):-1]
+       2.7%     277.6ms  save  [(inline):-1]
+       1.8%     186.2ms  (garbage collector)  [(inline):-1]
+       1.7%     177.1ms  fill  [(inline):-1]
+       0.5%      56.7ms  drawExternalLabel  [vis-network.min.js:31]
+       0.4%      36.6ms  drawExternalLabels  [vis-network.min.js:31]
+       0.2%      19.8ms  arc  [(inline):-1]
+       0.2%      19.5ms  closePath  [(inline):-1]
+       0.2%      16.6ms  beginPath  [(inline):-1]
+       0.1%      15.3ms  Cv  [vis-network.min.js:25]
