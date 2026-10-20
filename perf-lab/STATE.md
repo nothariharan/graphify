@@ -170,6 +170,17 @@ physics off), (3) keep capability. Aesthetics levers (straight/discrete) optiona
     the loop owner integrates a winner only after its lane doc + CSV + parity proof exist.
 
 ## Tick status
+2026-10-20 (idle tick, five prompts, no direction): both remaining items wait on a user decision,
+so per the loop contract this tick takes no measurement and changes no code.
+- (a) fold the L11 UX block into `_html_script` as `{_UX_JS}` — needs HUD default (on/off),
+  plain-click vs Shift+click for focus (plain click currently fights click-to-inspect), and the
+  hide-leaves threshold (degree <= 1 or <= 2).
+- (b) `--bake` on `graphify export html` (or `graphify bake`) runs `harness/bake.mjs` to populate
+  positions — needs a call on Node-at-export vs keeping localStorage-only (re-opens already instant).
+Bookkeeping: committed the previously untracked `results/ab-L11-focus.csv` so the L11 lane numbers
+have their source in the repo; LOG.md idle line added. Bench lock free; exporter untouched at
+`a796af5e...`; loop left armed. Next tick repeats this idle path until the user answers.
+
 2026-10-19 (tick: L9 closed, L10 landed, L11 landed): all three open lanes are now done.
 - L9 (node-draw): no adoptable lever (shadow already off, DPR disproven, no safe seam for
   fill grouping). Lane doc: lanes/L9-node-draw.md.
