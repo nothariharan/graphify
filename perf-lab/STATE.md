@@ -170,7 +170,7 @@ physics off), (3) keep capability. Aesthetics levers (straight/discrete) optiona
     the loop owner integrates a winner only after its lane doc + CSV + parity proof exist.
 
 ## Tick status
-2026-10-20 (ticks 1-4, idle — no measurement, no code change): four ticks with no direction on
+2026-10-20 (ticks 1-5, idle — no measurement, no code change): five ticks with no direction on
 `--bake`. Item (a) in the brief is stale — the UX block has shipped as `_UX_JS` since
 `114e05e1`. Blocked on one choice: bake inside `graphify html` (fast by default, adds Node +
 Chrome to the export path) or a separate `graphify bake` command (export stays

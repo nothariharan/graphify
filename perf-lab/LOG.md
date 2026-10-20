@@ -104,3 +104,4 @@ Chronological, newest last. One line per action with the figure that justifies i
 - 2026-10-20 tick 2 (idle, awaiting user): no direction on `--bake` since the last tick, so per the loop contract no measurement and no code change; bench lock free, loop left armed.
 - 2026-10-20 tick 3 (idle, awaiting user): still no direction on `--bake`; no measurement, no code change. Nothing else in the lane board is adoptable without one (L12 keep-edge-batch-at-rest would change the resting frame and needs the same kind of sign-off).
 - 2026-10-20 tick 4 (idle, awaiting user): no direction; no measurement, no code change.
+- 2026-10-20 tick 5 (idle, awaiting user): no direction; no measurement, no code change. The thread's last user message was a status question ("where are we rn"), which is not a direction on `--bake`.
