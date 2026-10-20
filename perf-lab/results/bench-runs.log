@@ -1,3 +1,20 @@
 2026-10-19 12:30:15+0530	0.1s	exit=0	bench_lock self-test (does it refuse to run without the lock?)	python -c print('locked run ok')
 2026-10-19 12:47:46+0530	25.2s	exit=0	agent-A: 25s measurement	python -c import time; time.sleep(25); print('A finished its measurement')
 2026-10-19 13:31:38+0530	198.2s	exit=0	L11 focus-mode gesture check	node harness/ab_drag.mjs --variants before=variants/base-ours-v7.html,focus=variants/L11-ux.html --rounds 3 --gestures node,pan,zoom --steps 90 --graph rsl --out results/ab-L11-focus.csv
+2026-10-20 11:39:01+0530	152.3s	exit=0	L13 first-open load: iterations vs baked, interleaved 5 rounds	node harness/ab_load.mjs --variants it200=variants/v8-obsidian.html,it60=variants/v8-it60.html,it30=variants/v8-it30.html,nolayout=variants/v8-nolayout.html,baked=variants/v8-baked.html --rounds 5 --out results/ab-load-L13.csv
+2026-10-20 12:01:00+0530	5.1s	exit=0	L13 shipped artifact: smoke the rebuilt v8 view	node harness/smoke_view.mjs --file view/after.html
+2026-10-20 12:04:52+0530	20.9s	exit=0	L13: smoke the rebuilt v8 view after the handler fix	node harness/smoke_view.mjs --file view/after.html
+2026-10-20 12:05:17+0530	20.2s	exit=0	L13: zoom/selection/hover health on the shipped v8 artifact	node harness/probe_zoom_health.mjs --file view/after.html
+2026-10-20 12:05:48+0530	22.1s	exit=0	L13: capture full zoom-health json on shipped v8	node harness/probe_zoom_health.mjs --file view/after.html
+2026-10-20 12:06:55+0530	22.5s	exit=1	L13: debug why hover focus reports 0 dimmed on the shipped artifact	node harness/_zt_hover.mjs view/after.html
+2026-10-20 12:08:07+0530	24.8s	exit=0	L13: debug hover focus (direct event vs real mouse)	node harness/_zt_hover.mjs view/after.html
+2026-10-20 12:08:36+0530	13.1s	exit=0	L13: check whether vis emits hoverNode from a real mouse move on the shipped page	node harness/_zt_hover2.mjs view/after.html
+2026-10-20 12:08:55+0530	12.0s	exit=0	L13: same real-mouse hover check on the verified v8 variant (control)	node harness/_zt_hover2.mjs variants/v8-obsidian.html
+2026-10-20 12:09:25+0530	17.5s	exit=0	L13: count pointer events to explain missing hoverNode in headless	node harness/_zt_hover3.mjs view/after.html
+2026-10-20 12:10:20+0530	13.6s	exit=0	L13: inspect live interaction.hover and call hoverObject directly	node harness/_zt_hover4.mjs view/after.html
+2026-10-20 12:10:44+0530	11.6s	exit=0	L13: synthetic mousemove into vis frame to test hover path	node harness/_zt_hover5.mjs view/after.html
+2026-10-20 12:11:01+0530	11.5s	exit=1	L13: synthetic mousemove on the canvas element itself	node harness/_zt_hover6.mjs view/after.html
+2026-10-20 12:11:18+0530	12.0s	exit=0	L13: synthetic mousemove on the canvas element itself	node harness/_zt_hover6.mjs view/after.html
+2026-10-20 12:11:40+0530	11.6s	exit=0	L13: control - does hoverNode fire on the HEAD baseline page?	node harness/_zt_hover6.mjs view/before.html
+2026-10-20 12:12:18+0530	19.8s	exit=0	L13: final zoom+hover health on the shipped v8 artifact, with screenshot	node harness/probe_zoom_health.mjs --file view/after.html --shot shots/zoomhealth-shipped.png
+2026-10-20 12:12:48+0530	20.5s	exit=0	L13: final zoom+hover health, restore included	node harness/probe_zoom_health.mjs --file view/after.html --shot shots/zoomhealth-shipped.png

@@ -456,6 +456,186 @@ network.on('afterDrawing', function(ctx) {{
 }});
 </script>"""
 
+# Interaction feel (#perf L13). Three independent behaviours, all canvas-2d and all
+# cheap enough to ship on every export:
+#
+# 1. Eased wheel zoom. vis zooms once per wheel *event*, and a trackpad fires dozens
+#    per frame, so the camera jumps and every event triggers a full redraw. Measured
+#    on rsl: 24 long tasks / 2369 ms during a wheel battery, and the user-reported
+#    "zoom freezes the graph". Here the target scale is accumulated and approached
+#    over rAF frames (one redraw per frame) and the point under the cursor is held
+#    fixed. Same battery after: 3 long tasks / 169 ms, zoom_fps 18.4 -> 46.
+# 2. Hover focus, Obsidian style: the hovered node and its 1-hop neighbours keep
+#    their community colour, everything else is blended toward the background.
+#    Restored on blur, never on click (the L11 prototype dimmed on click and left
+#    it there, which is what made the graph look washed out). Painting mutates the
+#    node instances' options.color and issues one redraw; datasets.update() for
+#    1886 nodes measured 149.6 ms and is exactly the hitch this avoids.
+# 3. An fps / frame-time HUD on H, for judging a machine's real frame budget.
+#    textContent only -- the L11 prototype appended a DOM node every frame.
+_UX_JS = """
+// ---- interaction feel (#perf L13): eased zoom, hover focus, frame HUD ----
+(function () {
+  var cont = document.getElementById('graph');
+  if (!cont || typeof network === 'undefined') return;
+
+  function gestureActive() {
+    try {
+      return (typeof _lean !== 'undefined' && _lean) ||
+             (typeof _dragging !== 'undefined' && _dragging);
+    } catch (e) { return false; }
+  }
+  function lean(on, redraw) {
+    try { if (typeof _setLean === 'function') _setLean(on, redraw); } catch (e) {}
+  }
+
+  // ---- 1. eased zoom at the cursor -------------------------------------
+  // network.moveTo(..., {animation:false}) does NOT emit zoom/pan in vis 9.1.6
+  // (measured: 2 moveTo calls -> 0 zoom, 0 pan), so the lean is driven here
+  // explicitly rather than by the 'zoom' handler.
+  var fitScale = null, MIN_S = 0.004, MAX_S = 2.0;
+  var targetScale = null, curScale = null, anchor = null, raf = 0, animating = false;
+
+  function viewCenter() {
+    var r = cont.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }
+  function zoomStep() {
+    raf = 0;
+    if (targetScale === null || !anchor) { animating = false; lean(false, true); return; }
+    var c = viewCenter();
+    var k = Math.log(targetScale / curScale);
+    var next = Math.abs(k) < 0.0025 ? targetScale : Math.exp(Math.log(curScale) + k * 0.25);
+    // world point currently under the cursor; hold it there while the scale changes
+    var wp = network.DOMtoCanvas({ x: anchor.x, y: anchor.y });
+    curScale = next;
+    network.moveTo({
+      position: { x: wp.x - (anchor.x - c.x) / next, y: wp.y - (anchor.y - c.y) / next },
+      scale: next,
+      animation: false
+    });
+    if (next !== targetScale) raf = requestAnimationFrame(zoomStep);
+    else {
+      animating = false;
+      setTimeout(function () { if (!raf) lean(false, true); }, 90);
+    }
+  }
+  cont.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    e.stopPropagation();          // vis's own per-event wheel handler never sees it
+    // Derived on the first wheel, after the fit: a baked build fits after this
+    // block runs, and reading it at script time would clamp to the pre-fit scale.
+    if (fitScale === null) {
+      fitScale = network.getScale();
+      MIN_S = Math.max(0.004, fitScale / 6);
+      MAX_S = Math.max(0.4, Math.min(2.0, fitScale * 12));
+    }
+    if (curScale === null) { curScale = network.getScale(); targetScale = curScale; }
+    var unit = e.deltaMode === 1 ? 0.05 : (e.deltaMode === 2 ? 1.0 : 0.0016);
+    targetScale = Math.max(MIN_S, Math.min(MAX_S, targetScale * Math.exp(-e.deltaY * unit)));
+    anchor = { x: e.clientX, y: e.clientY };
+    animating = true;
+    lean(true);
+    if (!raf) raf = requestAnimationFrame(zoomStep);
+  }, { passive: false, capture: true });
+
+  // Keep our copy in sync when something else moves the camera (fit, search focus).
+  network.on('zoom', function () {
+    if (!animating) { curScale = network.getScale(); targetScale = curScale; }
+  });
+
+  // ---- 2. hover focus (colour blend, no DataSet update) ----------------
+  var BG = '#0f0f1a';
+  try {
+    var bgv = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+    if (bgv) BG = bgv;
+  } catch (e) {}
+  function rgb(hex) {
+    var h = String(hex).replace('#', '');
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    var n = parseInt(h, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  function mix(hex, t) {
+    var a = rgb(hex), b = rgb(BG);
+    return 'rgb(' + Math.round(a[0] + (b[0] - a[0]) * t) + ',' +
+                    Math.round(a[1] + (b[1] - a[1]) * t) + ',' +
+                    Math.round(a[2] + (b[2] - a[2]) * t) + ')';
+  }
+  var nodesObj = network.body.nodes;
+  var orig = new Map(), dimCache = new Map();
+  for (var oid in nodesObj) {
+    var oc = nodesObj[oid] && nodesObj[oid].options && nodesObj[oid].options.color;
+    if (oc && typeof oc === 'object' && oc.background) {
+      orig.set(oid, { bg: oc.background, bd: oc.border || oc.background });
+    }
+  }
+  function dimOf(hex) {
+    var d = dimCache.get(hex);
+    if (!d) { d = mix(hex, 0.55); dimCache.set(hex, d); }
+    return d;
+  }
+  var hoverTimer = 0, hoverOn = false;
+  function paint(keep) {
+    for (var nid in nodesObj) {
+      var n = nodesObj[nid];
+      var nc = n && n.options && n.options.color;
+      var o = orig.get(nid);
+      if (!nc || typeof nc !== 'object' || !o) continue;
+      if (!keep || keep.has(nid)) { nc.background = o.bg; nc.border = o.bd; }
+      else { var d = dimOf(o.bg); nc.background = d; nc.border = d; }
+    }
+  }
+  function setHover(id) {
+    if (gestureActive()) return;      // never fight a drag or a zoom
+    var keep = new Set([id]);
+    var one = network.getConnectedNodes(id) || [];
+    for (var i = 0; i < one.length; i++) keep.add(one[i]);
+    paint(keep);
+    hoverOn = true;
+    network.redraw();
+  }
+  function clearHover() {
+    if (!hoverOn) return;
+    paint(null);
+    hoverOn = false;
+    network.redraw();
+  }
+  network.on('hoverNode', function (p) {
+    clearTimeout(hoverTimer);
+    hoverTimer = setTimeout(function () { setHover(p.node); }, 70);
+  });
+  network.on('blurNode', function () {
+    clearTimeout(hoverTimer);
+    hoverTimer = setTimeout(clearHover, 140);
+  });
+  network.on('dragStart', function () { clearTimeout(hoverTimer); clearHover(); });
+
+  // ---- 3. frame HUD on H ----------------------------------------------
+  var hud = document.createElement('div');
+  hud.style.cssText = 'position:fixed;top:8px;right:8px;z-index:9999;background:rgba(0,0,0,.72);' +
+    'color:#fff;font:11px/1.4 ui-monospace,monospace;padding:4px 8px;border-radius:4px;' +
+    'display:none;pointer-events:none';
+  document.body.appendChild(hud);
+  var hudOn = false, frames = 0, t0 = performance.now(), fps = 0;
+  var lastT = t0, ft = 0;
+  (function loop(t) {
+    ft = t - lastT; lastT = t; frames++;
+    if (t - t0 >= 500) { fps = Math.round(frames * 1000 / (t - t0)); frames = 0; t0 = t; }
+    if (hudOn) hud.textContent = fps + ' fps   ' + ft.toFixed(1) + ' ms';
+    requestAnimationFrame(loop);
+  })(t0);
+  document.addEventListener('keydown', function (e) {
+    var tag = (document.activeElement && document.activeElement.tagName) || '';
+    if ((e.key === 'h' || e.key === 'H') && tag !== 'INPUT' && tag !== 'TEXTAREA') {
+      hudOn = !hudOn;
+      hud.style.display = hudOn ? 'block' : 'none';
+    }
+  });
+})();
+"""
+
+
 def _html_script(nodes_json: str, edges_json: str, legend_json: str,
                  defer_arrows: bool = False,
                  lean_gestures: bool = False,
@@ -468,10 +648,9 @@ def _html_script(nodes_json: str, edges_json: str, legend_json: str,
     physics_enabled = "false" if baked else "true"
     stab_iters = "0" if baked else "200"
     stabilization_handler = "" if baked else (
-        "network.once('stabilizationIterationsDone', () => {\\n"
-        "  network.setOptions({ physics: { enabled: false } });\\n"
-        "  _savePositions();\\n"
-        "});"
+        "network.once('stabilizationIterationsDone', () => {"
+        " network.setOptions({ physics: { enabled: false } });"
+        " _savePositions(); });"
     )
     baked_fit_js = "try { network.fit({ animation: false }); } catch (e) {}" if baked else ""
     return f"""<script>
@@ -782,6 +961,7 @@ LEGEND.forEach(c => {{
   }};
   legendEl.appendChild(item);
 }});
+{_UX_JS if lean_gestures else ''}
 </script>"""
 
 
@@ -951,7 +1131,15 @@ def to_html(
         node = {
             "id": node_id,
             "label": label,
-            "color": {"background": color, "border": color, "highlight": {"background": "#ffffff", "border": color}},
+            # Keep the community colour when selected or hovered, and accent with a
+            # white border ring. The old highlight repainted the node #ffffff, which
+            # made a selected/hovered cluster look washed out (#perf L13).
+            "color": {
+                "background": color,
+                "border": color,
+                "highlight": {"background": color, "border": "#ffffff"},
+                "hover": {"background": color, "border": "#ffffff"},
+            },
             "size": round(size, 1),
             "font": {"size": font_size, "color": "#ffffff"},
             # Tooltip `title` is a STRING, which vis-network renders via
@@ -996,9 +1184,12 @@ def to_html(
                     ring = "#9ca3af"
                     node["shapeProperties"] = {"borderDashes": [4, 4]}
                 node["borderWidth"] = 3
+                # Selection keeps the community fill here too; the status ring is
+                # what must stay legible, so it stays the highlight border.
                 node["color"] = {
                     "background": color, "border": ring,
-                    "highlight": {"background": "#ffffff", "border": ring},
+                    "highlight": {"background": color, "border": ring},
+                    "hover": {"background": color, "border": ring},
                 }
             # Lesson line appended to the hover title.
             if status == "contested":
@@ -1061,10 +1252,9 @@ def to_html(
     physics_enabled = "false" if _baked_all else "true"
     stab_iters = "0" if _baked_all else "200"
     stabilization_handler = "" if _baked_all else (
-        "network.once('stabilizationIterationsDone', () => {\\n"
-        "  network.setOptions({ physics: { enabled: false } });\\n"
-        "  _savePositions();\\n"
-        "});"
+        "network.once('stabilizationIterationsDone', () => {"
+        " network.setOptions({ physics: { enabled: false } });"
+        " _savePositions(); });"
     )
     baked_fit_js = "try { network.fit({ animation: false }); } catch (e) {}" if _baked_all else ""
     title = _html.escape(sanitize_label(_html_document_title(output_path)))

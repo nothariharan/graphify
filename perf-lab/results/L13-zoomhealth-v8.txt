@@ -1,0 +1,164 @@
+﻿{
+  "file": "view/after.html",
+  "clicked": "pages_boardpage_test_disabledel",
+  "frames_in": {
+    "n": 98,
+    "p50": 16.9,
+    "p95": 29.1,
+    "max": 105.7,
+    "over33": 3,
+    "over250": 0
+  },
+  "frames_out": {
+    "n": 86,
+    "p50": 21.8,
+    "p95": 30.8,
+    "max": 39.6,
+    "over33": 4,
+    "over250": 0
+  },
+  "midIn": {
+    "scale": 0.33233521580450537,
+    "lean": true,
+    "alpha": null,
+    "overriddenEdges": 3876,
+    "white": 0,
+    "dimmed": 0,
+    "dimColor": 0,
+    "dom": 50,
+    "selected": [
+      "pages_boardpage_test_disabledel"
+    ],
+    "physics": false
+  },
+  "midOut": {
+    "scale": 0.23995609562855025,
+    "lean": true,
+    "alpha": null,
+    "overriddenEdges": 3876,
+    "white": 0,
+    "dimmed": 0,
+    "dimColor": 0,
+    "dom": 50,
+    "selected": [
+      "pages_boardpage_test_disabledel"
+    ],
+    "physics": false
+  },
+  "before": {
+    "scale": 0.08274345833109292,
+    "lean": false,
+    "alpha": null,
+    "overriddenEdges": 0,
+    "white": 0,
+    "dimmed": 0,
+    "dimColor": 0,
+    "dom": 41,
+    "selected": [],
+    "physics": false
+  },
+  "afterClick": {
+    "scale": 0.08274345833109292,
+    "lean": false,
+    "alpha": null,
+    "overriddenEdges": 0,
+    "white": 0,
+    "dimmed": 0,
+    "dimColor": 0,
+    "dom": 50,
+    "selected": [
+      "pages_boardpage_test_disabledel"
+    ],
+    "physics": false
+  },
+  "afterIn": {
+    "scale": 0.9929214999731151,
+    "lean": false,
+    "alpha": null,
+    "overriddenEdges": 0,
+    "white": 0,
+    "dimmed": 0,
+    "dimColor": 0,
+    "dom": 50,
+    "selected": [
+      "pages_boardpage_test_disabledel"
+    ],
+    "physics": false
+  },
+  "afterOut": {
+    "scale": 0.06753537991967508,
+    "lean": true,
+    "alpha": null,
+    "overriddenEdges": 3876,
+    "white": 0,
+    "dimmed": 0,
+    "dimColor": 0,
+    "dom": 50,
+    "selected": [
+      "pages_boardpage_test_disabledel"
+    ],
+    "physics": false
+  },
+  "settled": {
+    "scale": 0.06753537991967508,
+    "lean": false,
+    "alpha": null,
+    "overriddenEdges": 0,
+    "white": 0,
+    "dimmed": 0,
+    "dimColor": 0,
+    "dom": 50,
+    "selected": [
+      "pages_boardpage_test_disabledel"
+    ],
+    "physics": false
+  },
+  "afterAway": {
+    "scale": 0.06753537991967508,
+    "lean": false,
+    "alpha": null,
+    "overriddenEdges": 0,
+    "white": 0,
+    "dimmed": 0,
+    "dimColor": 0,
+    "dom": 50,
+    "selected": [
+      "pages_boardpage_test_disabledel"
+    ],
+    "physics": false
+  },
+  "hoverVia": "network.emit(hoverNode)",
+  "hovered": {
+    "scale": 0.06753537991967508,
+    "lean": false,
+    "alpha": null,
+    "overriddenEdges": 0,
+    "white": 0,
+    "dimmed": 0,
+    "dimColor": 1884,
+    "dom": 50,
+    "selected": [
+      "pages_boardpage_test_disabledel"
+    ],
+    "physics": false
+  },
+  "unhovered": {
+    "scale": 0.06753537991967508,
+    "lean": false,
+    "alpha": null,
+    "overriddenEdges": 0,
+    "white": 0,
+    "dimmed": 0,
+    "dimColor": 0,
+    "dom": 50,
+    "selected": [
+      "pages_boardpage_test_disabledel"
+    ],
+    "physics": false
+  },
+  "errors": [
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ]
+}
+[bench_lock] acquired by 18932 for: L13: final zoom+hover health, restore included
+[bench_lock] L13: final zoom+hover health, restore included: exit=0 in 20.5s (logged to results/bench-runs.log)

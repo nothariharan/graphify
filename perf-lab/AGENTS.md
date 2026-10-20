@@ -42,30 +42,43 @@ behave worse is a regression.
 7. **Never `--use-gl=swiftshader`** for a WebGL measurement, and never treat a single run's
    absolute fps as a result (§4).
 
-## 3. Where things stand (shipped in the exporter, committed as `3a09ba73`)
+## 3. Where things stand (shipped in the exporter, working tree `b17c3797`)
 
-`graphify/exporters/html.py` — sha256 `a796af5e929ad8da46140f95050ea6306c43d7564fff037a6365c928c1c6f978` (commit 716c421e: added pre-baked position consumption for L10)
+`graphify/exporters/html.py` — sha256 `b17c3797bae7ab88f1761acd6a2c585b4d979b9f77dd7afe25cd061abe52ac9e`
+(uncommitted at the time of writing; the last commit that touched it is `716c421e`).
 
 | lever | what it does | gate |
 |---|---|---|
 | arrows on hover | dense graphs stop drawing an arrowhead per edge per frame; hover an edge/node to see direction | >1500 edges (`ARROW_DEFER_EDGE_THRESHOLD`) |
 | layout cache | the stabilized x/y are cached so a re-open skips the solver | always |
+| pre-baked positions | physics off + no solver + fit when every node carries x/y (consumed since `716c421e`; nothing emits them yet) | all nodes have x/y |
 | border lean | during a drag/zoom the node border stroke is dropped and restored on release | >800 nodes (`LEAN_GESTURE_NODE_THRESHOLD`) |
 | batched edge pass | for the length of a gesture, `edgeType.drawLine` is replaced per edge by **one draw of every edge**, grouped by (colour, dashes, base width); 3876 strokes → 20 on rsl | same gate as the lean |
 | curve fidelity | the batch draws the same quadratic vis draws at rest (`_curveTo` reproduces `_getViaCoordinates` for `continuous`), verified against `edgeType.getViaNode()` on all 3876 edges, worst disagreement 0.0 | — |
+| eased zoom (L13) | wheel events accumulate a target scale, one redraw per rAF frame, the world point under the cursor held fixed, clamped `fit/6 … min(2.0, fit*12)`; vis's own wheel handler bypassed | same gate as the lean |
+| hover focus (L13) | hovered node + 1-hop keep their colour, the rest blend 55% toward `--bg`; written on the node instances (never `nodesDS.update`), restored on blur | same gate as the lean |
+| colour-preserving selection (L13) | highlight/hover keep the community fill and add a white border ring; no `#ffffff` fill anywhere | always |
+| frame HUD (L13) | fps + frame ms, toggled with `H`, textContent only | same gate as the lean |
 
 Certified (`results/ab-rsl-v7-certified.csv`, rsl 1886/3876, interleaved 3 rounds vs a fresh
 HEAD build): **node drag 40.4 → 82.9 fps (x2.05), pan 39.1 → 78.9 (x2.02), zoom 15.2 → 80.4
 (x5.29)**, stalled frames (>33 ms) 13/14/91 per 90 → 1/1/0. Across all certified runs of this
 lever the paired ratio spans **x1.7–x5.8**.
 
-Shipped artifact: `variants/base-ours-v7.html` (1858106 bytes, sha256 `51729782d6c02146e00e3c1affe7fe092126d802aa26c14061bd10356b6b282f`). Regenerate it
+Shipped artifact: `variants/base-ours-v8.html` (1972184 bytes, sha256
+`c09d310fb6036da7d2a3e5c230c4e72eefaf6c284ed4f0f33299111f41b357c8`). Regenerate it
 from the working tree with:
 ```powershell
-python harness/build_base.py --graph-json ../worked/rsl-siege-manager/graph.json --name ours-v7
+python harness/build_base.py --graph-json ../worked/rsl-siege-manager/graph.json --name ours-v8
 ```
 If your regenerated artifact's exporter-block hash differs from the above, the exporter moved:
 say so in `LOG.md`, and re-measure before quoting any number in this file.
+
+L13 certified on this artifact (`results/L13-zoomhealth-v8.txt`): zoom in p50 16.9 / p95 29.1
+/ max 105.7 ms, 3 stalls >33 ms per 98 frames, 0 >250 ms; zoom out p50 21.8 / p95 30.8. Lean
+true and the edge batch on all 3876 edges mid-zoom, `white: 0`, `dimmed: 0`; hover dims 1884
+and restores to 0 on blur. First open (5-round medians, `results/ab-load-L13.csv`): it200 9907
+ms, it60 5030, it30 1901 (rejected on layout quality), nolayout 9547, baked 1259.
 
 ## 4. The measurement contract
 
@@ -90,18 +103,18 @@ steals immediately. Do not measure outside `run`.
 Canonical commands:
 ```powershell
 # interleaved A/B/C (the primary instrument)
-node harness/ab_drag.mjs --variants "before=variants/base-rsl-head.html,curved=variants/base-ours-v7.html" `
+node harness/ab_drag.mjs --variants "before=variants/base-rsl-head.html,curved=variants/base-ours-v8.html" `
      --rounds 3 --gestures node,pan,zoom --steps 90 --graph rsl --out results/ab-rsl-<what>.csv
 
 # where do the canvas ops go? (stroke counts, lineWidth histograms, bezier/line/quad counters)
-node harness/probe_borderdraw.mjs --file variants/base-ours-v7.html --mode node|pan|zoom
+node harness/probe_borderdraw.mjs --file variants/base-ours-v8.html --mode node|pan|zoom
 # is the batched draw faithful? (stroke count, curve count, colour/dash sets, live endpoints, restore)
-node harness/probe_edgebatch.mjs --file variants/base-ours-v7.html
+node harness/probe_edgebatch.mjs --file variants/base-ours-v8.html
 # does the in-motion frame match the resting frame? (pixel diff at the same camera)
 python harness/mk_batch_curved.py   # builds the "noborder" builds the pixel probe needs
 node harness/probe_motion_pixels.mjs --file variants/batch-curved-noborder.html --mode pan|zoom
 # what does it look like mid-gesture?
-node harness/shot_gesture.mjs --file variants/base-ours-v7.html --mode pan --out shots/x.png
+node harness/shot_gesture.mjs --file variants/base-ours-v8.html --mode pan --out shots/x.png
 # render the user-facing pair, then serve it
 python harness/make_view.py
 python -m http.server 8231 --bind 127.0.0.1 --directory .    # from perf-lab
@@ -139,27 +152,22 @@ does not exist for the next agent.
 ## 6. Lane board
 
 Done: **L1** offline/CDN, **L2** load+physics, **L3** edge render, **L4** labels/LOD,
-**L5** huge graphs, **L6** exporter integration, **L8** gesture latency.
+**L5** huge graphs, **L6** exporter integration, **L8** gesture latency, **L9** node draw
+(no lever), **L10** pre-baked positions (consumed, `--bake` flag outstanding),
+**L11** viewer experience (folded into the exporter as `_UX_JS` by L13),
+**L13** interaction feel (eased zoom, hover focus, colour-preserving selection).
 Parked: **L7** WebGL/sigma (numbers were great — pan 4.8 → 90-110 fps — but the user rejected
 the look and it needs a full rewrite). Do not reopen L7 unless the user asks.
 
 Open, in the order they are worth trying. Take one, write `lanes/L<n>-<name>.md`, and put your
 hypothesis in it *before* you measure.
 
-- **L9 — node draw is now the floor.** At rest rsl draws 1886 node `arc`+`fill`+`shadow` ops;
-after the edge batch that is ~18 ms of a ~45 ms resting frame, and the resting frame is what
-the gesture starts from. Hypotheses, in order: (a) group nodes by (fill colour, radius) and
-issue one `beginPath()` + `arc` per node + one `fill()` per group; (b) drop the node shadow /
-`globalAlpha` changes during a gesture only; (c) render the node pass at a lower DPR while a
-gesture is live and restore on release. Measure with `ab_drag.mjs` and prove look-parity with
-`probe_motion_pixels.mjs`.
-- **L10 — first open is still slow.** The solver runs on first open; only the *second* open
-is instant (localStorage). Baking stabilized x/y into the exported HTML measured **-85% load**
-earlier. This is the biggest remaining *felt* win for someone opening a shared `graph.html`.
-- **L11 — viewer experience.** Click-to-focus (dim everything outside the 2-hop
-neighbourhood), search → fly-to + pulse, an fps/frame-time HUD toggle, community legend
-isolate/hide-leaves, community names at fit zoom. These make it a graph someone "would love to
-use" — and focus mode is also faster because fewer things draw.
+- **L10 follow-up — the `--bake` flag.** First open is still ~9.9 s on rsl because the solver
+  runs; baking positions measured 1.3 s (x0.13) with the 200-iteration layout intact
+  (`results/ab-load-L13.csv`). The exporter already consumes x/y; what is missing is a
+  headless-browser step at export time that writes them into the node data.
+- **L12 — keep the edge batch on at rest.** The resting frame is 5762 strokes; the batch draws
+  the same curves in 20. Closed L9 proposed it; nobody has measured it yet.
 - **L5 (revisit) — beyond canvas 2D.** 9142-node graphs are unusable at any setting. Aggregate
   view exists; the honest alternatives are a bundled/edge-summarised low-zoom view (capability
   returns on zoom-in) or WebGL (rejected).
@@ -206,6 +214,16 @@ use" — and focus mode is also faster because fewer things draw.
   restore needs an explicit redraw.
 - Padding/viewport size changes the on-screen content, so `pan_fps`-style numbers are only
   comparable within one layout.
+- `n.options.opacity` and `setOptions({ nodes: { opacity } })` do **not** change the draw;
+  only `n.options.color.background` / `.border` does. Writing those on the instances is cheap;
+  `nodesDS.update` for 1886 nodes is 149.6 ms.
+- vis emits no `hoverNode` from Playwright's synthetic mouse in headless Chrome (the move
+  arrives — its tooltip shows the node label — and the HEAD baseline behaves identically).
+  Drive `network.emit('hoverNode')` when a probe needs the hover code to run, and say so.
+- A Python string that ends up in the emitted page must not contain `\\n`: `716c421e` shipped
+  the stabilization handler that way and every build since had a parse error and rendered
+  nothing (caught by `smoke_view.mjs` as `Invalid or unexpected token`). Keep injected JS on
+  one line, and let `test_stabilization_handler_is_valid_js` guard it.
 - `worked/` JSONs and root-level `dbg_*.py` / `fuzz_*.py` / `cov_*.py` / `repro_*.py` are the
   user's scratch files. Do not delete or "tidy" them.
 
@@ -213,8 +231,8 @@ use" — and focus mode is also faster because fewer things draw.
 
 1. Read this file, `STATE.md` tick status, the last 20 lines of `LOG.md`, the tail of `DECISIONS.tsv`.
 2. `python harness/bench_lock.py status`.
-3. Confirm the shipped artifact is current: rebuild `base-ours-v7.html` and compare the
+3. Confirm the shipped artifact is current: rebuild `base-ours-v8.html` and compare the
    exporter block against the hash above.
-4. `python -m pytest tests/test_html_perf_levers.py -q` (from the repo root) — 20 tests, all
+4. `python -m pytest tests/test_html_perf_levers.py -q` (from the repo root) — 27 tests, all
    green, before you change anything.
 5. Pick a lane from §6 or the next `STATE.md` item, write the lane doc, then measure.

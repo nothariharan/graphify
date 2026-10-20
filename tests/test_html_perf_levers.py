@@ -91,6 +91,17 @@ def test_layout_cache_emitted_for_every_graph(tmp_path):
         assert "localStorage.setItem(POSK" in html
 
 
+def test_stabilization_handler_is_valid_js(tmp_path):
+    """`716c421e` shipped the handler as "…() => {\\n  network…", so the emitted page
+    contained a literal backslash-n and the whole main <script> died on a parse error:
+    no graph at all. The handler must carry no escape sequence."""
+    html, _ = _render(tmp_path, 20, 1)
+    assert "\\\\n" not in html
+    assert ("network.once('stabilizationIterationsDone', () => { "
+            "network.setOptions({ physics: { enabled: false } }); "
+            "_savePositions(); });") in html
+
+
 def test_offline_vis_fallback_present(tmp_path):
     """The CDN script must fall back to a sibling vis-network.min.js so a graph
     still renders offline when that file is dropped next to it (L1: blocking the
@@ -266,6 +277,99 @@ def test_sparse_small_graph_gets_none_of_the_gesture_levers(tmp_path):
                    "const _EDGE_BATCH", "_syncArrows", "dragStart"):
         assert marker not in html
     assert "nodes: { shape: 'dot', borderWidth: 1.5 }," in html
+
+
+# --- interaction feel (#perf L13) ---------------------------------------------
+# The reported "zoom freezes the graph and the colours go dim" came from two separate
+# bugs in a prototype: per-event wheel zoom (24 long tasks / 2369ms over one battery)
+# and a click-to-focus that set node opacity and never put it back (1858 nodes left
+# dimmed after a single click). Both are shipped here as: an eased cursor-anchored
+# zoom that redraws once per frame, and a hover-only focus that always restores.
+
+def test_selection_keeps_the_community_colour(tmp_path):
+    """A selected or hovered node must keep its community colour and gain a white
+    ring instead. The old highlight repainted the fill #ffffff, so clicking a dense
+    cluster washed it out."""
+    html, _ = _render(tmp_path, 120, 25)
+    assert '"background": "#ffffff"' not in html
+    pairs = re.findall(
+        r'"color": \{"background": "(#[0-9A-Fa-f]{6})", "border": "#[0-9A-Fa-f]{6}", '
+        r'"highlight": \{"background": "(#[0-9A-Fa-f]{6})", "border": "#ffffff"\}, '
+        r'"hover": \{"background": "(#[0-9A-Fa-f]{6})", "border": "#ffffff"\}\}',
+        html,
+    )
+    assert pairs, "no node emitted the new highlight/hover colour dict"
+    for bg, hi_bg, hov_bg in pairs:
+        assert hi_bg == bg
+        assert hov_bg == bg
+
+
+def test_large_graph_gets_the_eased_zoom(tmp_path):
+    """vis zooms once per wheel event, so a trackpad fires a full redraw dozens of
+    times a frame. The shipped path accumulates a target scale and approaches it on
+    rAF, holding the world point under the cursor fixed."""
+    html, _ = _render(tmp_path, 900, 3)
+    assert "targetScale = Math.max(MIN_S, Math.min(MAX_S, targetScale * Math.exp(-e.deltaY * unit)));" in html
+    # the animation is frame-driven and eases toward the target rather than snapping
+    assert "raf = requestAnimationFrame(zoomStep);" in html
+    assert "var k = Math.log(targetScale / curScale);" in html
+    assert "network.moveTo({" in html
+    # vis's own wheel handler must never also see the event, or every delta redraws
+    assert "{ passive: false, capture: true }" in html
+    assert "e.stopPropagation();" in html
+    # the anchor is the cursor, converted to world space before the scale changes
+    assert "var wp = network.DOMtoCanvas({ x: anchor.x, y: anchor.y });" in html
+
+
+def test_hover_focus_is_hover_only_and_always_restored(tmp_path):
+    """Dimming must never survive the pointer leaving the node: blur restores every
+    node, and a drag clears focus before it starts."""
+    html, _ = _render(tmp_path, 900, 3)
+    code = _without_js_comments(html)
+    assert "network.on('hoverNode'" in code
+    assert "network.on('blurNode'" in code
+    assert "hoverTimer = setTimeout(clearHover, 140);" in code
+    assert "network.on('dragStart', function () { clearTimeout(hoverTimer); clearHover(); });" in code
+    # focus is reached by mutating the instance colours, never by updating the DataSet
+    # (1886-node update measured 149.6ms) and never by writing opacity onto nothing
+    assert "nc.background = o.bg; nc.border = o.bd;" in code
+    assert "nc.background = d; nc.border = d;" in code
+    assert "nodesDS.update" not in html.split("// ---- 2. hover focus")[1].split("// ---- 3.")[0]
+
+
+def _ux_block(html: str) -> str:
+    """Just the L13 interaction block, so a marker that the base template already
+    ships (the info-panel click handler, the cursor hoverNode) cannot satisfy an
+    assertion about this block."""
+    start = html.index("interaction feel (#perf L13)")
+    return html[start:html.index("</script>", start)]
+
+
+def test_no_click_to_focus(tmp_path):
+    """The prototype's dimming was on click. Nothing in the interaction block may
+    listen for one, and nothing may dim by opacity (vis ignores it on the draw)."""
+    html, _ = _render(tmp_path, 900, 3)
+    block = _ux_block(html)
+    assert "network.on('click'" not in block
+    assert "selectNode" not in block
+    assert "opacity" not in block
+
+
+def test_zoom_is_clamped_around_the_fit(tmp_path):
+    """Unbounded wheel zoom let labels grow without limit; the range is derived after
+    the fit on first use, because a baked build fits after this script runs."""
+    html, _ = _render(tmp_path, 900, 3)
+    assert "MIN_S = Math.max(0.004, fitScale / 6);" in html
+    assert "MAX_S = Math.max(0.4, Math.min(2.0, fitScale * 12));" in html
+    assert "if (fitScale === null) {" in html
+
+
+def test_interaction_block_is_absent_on_small_graphs(tmp_path):
+    """A small graph stays byte-identical: no eased zoom, no hover focus, no HUD."""
+    html, _ = _render(tmp_path, 20, 1)
+    assert "interaction feel (#perf L13)" not in html
+    for marker in ("zoomStep", "dimOf", "fitScale", "targetScale"):
+        assert marker not in html
 
 
 def test_dense_arrow_reveal_is_batched_not_per_edge(tmp_path):

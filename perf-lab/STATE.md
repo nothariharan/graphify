@@ -170,6 +170,33 @@ physics off), (3) keep capability. Aesthetics levers (straight/discrete) optiona
     the loop owner integrates a winner only after its lane doc + CSV + parity proof exist.
 
 ## Tick status
+2026-10-20 (tick: L13 interaction feel — ported, verified, documented):
+The user's report ("zoom freezes the graph", "node colours go dim") is answered. Both were
+real and both are fixed in the exporter:
+- **Dimming = the L11 prototype**, not the shipped graph: its click-to-focus wrote
+  `opacity: 0.12` onto 1858 of 1886 nodes and only restored on a background click. Focus is
+  now hover-only, blends colour instead of opacity, and always restores on blur (1884 dimmed
+  on hover → 0 after blur, measured).
+- **Zoom = one full redraw per wheel event.** Now an eased, cursor-anchored zoom with one
+  redraw per rAF frame and a `fit/6 … min(2.0, fit*12)` clamp. Mid-zoom health on the shipped
+  artifact: p50 16.9 / p95 29.1 / max 105.7 ms, 3 stalls >33ms per 98 frames, 0 >250ms, lean
+  on, batch on all 3876 edges, no white, no dim.
+- Selection keeps the community colour with a white ring (the old `#ffffff` highlight fill is
+  gone, including in the learning-status override).
+- Found and fixed a real breakage on the way: `716c421e` emitted the stabilization handler
+  with a literal `\n`, so **every artifact built since then has a syntax error and renders no
+  graph**. New regression test guards it.
+
+Tests 27/27 green (7 new). `view/after.html` rebuilt from `base-ours-v8.html`, smoke clean
+(1886/3876/1886 drawn, physics off, no JS errors). Lane: `lanes/L13-interaction-feel.md`.
+Bench lock free at the end of the tick; loop left armed.
+
+2026-10-20 (load finding, same tick): first open is still the biggest felt cost. Interleaved
+5-round medians (`results/ab-load-L13.csv`): it200 9907 ms, it60 5030 (x0.51), it30 1901
+(x0.19, **rejected** — hairball, see `shots/fit-30.png`), nolayout 9547 (x0.96), baked 1259
+(x0.13). Baked is the only honest win; it needs a headless browser at export time and is not
+wired to a `--bake` flag yet.
+
 2026-10-20 (idle tick, five prompts, no direction): both remaining items wait on a user decision,
 so per the loop contract this tick takes no measurement and changes no code.
 - (a) fold the L11 UX block into `_html_script` as `{_UX_JS}` — needs HUD default (on/off),
