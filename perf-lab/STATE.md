@@ -170,6 +170,11 @@ physics off), (3) keep capability. Aesthetics levers (straight/discrete) optiona
     the loop owner integrates a winner only after its lane doc + CSV + parity proof exist.
 
 ## Tick status
+2026-10-20 (tick 3, idle — no measurement, no code change): still no direction on `--bake`.
+Nothing else on the board can move without a decision either (L12 would change the resting
+frame). Waiting on: Node-at-export vs separate `graphify bake` command. Bench lock free,
+exporter at `b17c3797`, loop armed.
+
 2026-10-20 (tick 2, idle — no measurement, no code change): no direction on `--bake` since the
 last tick. The tick brief's item (a) is stale: the UX block has been in the exporter as
 `_UX_JS` since `114e05e1`. Still waiting on the (b) choice — Node-at-export (fast files, adds
