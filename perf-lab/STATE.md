@@ -170,6 +170,22 @@ physics off), (3) keep capability. Aesthetics levers (straight/discrete) optiona
     the loop owner integrates a winner only after its lane doc + CSV + parity proof exist.
 
 ## Tick status
+2026-10-20 (idle tick, awaiting user — no measurement, no code change):
+The tick brief listed (a) fold the L11 UX block and (b) `--bake` as the remaining decisions, but
+(a) was already executed in this session as L13 and committed (`114e05e1`), with the judgement
+calls resolved rather than deferred: HUD off by default, no click-to-focus at all (focus is
+hover-only and always restores), and hide-leaves/legend-isolate dropped rather than guessed at.
+Lane doc `lanes/L13-interaction-feel.md`, evidence `results/L13-*.{csv,txt}`, tests 27/27.
+
+What is left is (b), and it needs the user:
+- **Node-at-export**: the exporter shells out to a headless browser to bake 200-iteration
+  positions into the node data, so every `graphify html` output opens at x0.13 of today's load
+  (~1.3 s instead of 9.9 s on rsl). Adds a Node + Chrome dependency to the export path.
+- **Optional documented step**: keep `graphify html` dependency-free, ship `graphify bake` as a
+  separate command the user runs when they want the fast file.
+Until one is chosen, no code change and no measurement. Bench lock free; exporter at
+`b17c3797`; loop left armed.
+
 2026-10-20 (tick: L13 interaction feel — ported, verified, documented):
 The user's report ("zoom freezes the graph", "node colours go dim") is answered. Both were
 real and both are fixed in the exporter:
