@@ -146,11 +146,20 @@ let _lean = false, _draggingNow = false, _zoomTimer = null, _border0 = null;
 // identical. The replacement is deleted on release, which restores the prototype method.
 const _EDGE_BATCH = (function () {
   let _installed = false, _drawn = false, _groups = null, _ctx = null, _errors = 0;
+  let _rest = false, _dirty = false;
 
   function _dashOf(t) {
     const d = t.dashes;
     if (d === false || d === null || d === undefined) return null;
     return d === true ? [5, 5] : d;
+  }
+
+  // An edge that is showing its arrowhead cannot be drawn by the batch: the batch draws
+  // the line, not the arrow. Dense graphs defer arrows to hover, so this is the edges the
+  // user is currently inspecting.
+  function _arrowed(et) {
+    const a = et && et.options && et.options.arrows;
+    return !!(a && a.to && a.to.enabled === true);
   }
 
   function _scale() {
@@ -170,17 +179,26 @@ const _EDGE_BATCH = (function () {
     for (const id in es) {
       const e = es[id];
       if (!e || !e.connected || !e.edgeType) continue;
+      // vis draws an edge only when the edge and BOTH endpoints are visible
+      // (Body._updateVisibleIndices). Legend filtering hides nodes, not edges, so without
+      // this the cached batch would keep drawing the hidden node's edges.
+      const fo = e.from && e.from.options, to = e.to && e.to.options;
+      if ((e.options && e.options.hidden) || (fo && fo.hidden) || (to && to.hidden)) continue;
       let t = null;
       try { t = e.getFormattingValues(); } catch (err) { continue; }
       if (!t || t.hidden) continue;
       let col = null;
       try { col = e.edgeType.getColor(_ctx, t); } catch (err) { continue; }
       if (typeof col !== 'string') continue;  // gradient / exotic: leave it to vis
-      const dash = _dashOf(t);
+      // Dashed edges (INFERRED confidence) keep vis's own draw. Their dash rendering has to
+      // match vis exactly and there are few of them on a dense graph (393 of 3876 on rsl),
+      // so 393 strokes beat risking a differently-dashed confidence encoding.
+      if (_dashOf(t)) { e.edgeType.__leanDash = true; continue; }
+      if (e.edgeType.__leanDash) delete e.edgeType.__leanDash;
       const baseW = (e.options && typeof e.options.width === 'number') ? e.options.width : t.width;
-      const key = col + '|' + (dash ? dash.join(',') : '') + '|' + baseW;
+      const key = col + '|' + baseW;
       let grp = map.get(key);
-      if (!grp) map.set(key, grp = { col: col, baseW: baseW, dash: dash, ets: [] });
+      if (!grp) map.set(key, grp = { col: col, baseW: baseW, ets: [] });
       grp.ets.push(e.edgeType);
     }
     _groups = [];
@@ -221,7 +239,6 @@ const _EDGE_BATCH = (function () {
       // vis sets lineWidth to max(width, 0.3/scale) on every draw; the floor moves with
       // the zoom, so it has to be re-derived per frame rather than baked in at dragStart.
       g.lineWidth = Math.max(grp.baseW, floor);
-      if (grp.dash) { g.save(); g.lineCap = 'round'; g.setLineDash(grp.dash); }
       g.beginPath();
       for (let j = 0; j < ets.length; j++) {
         const et = ets[j];
@@ -229,47 +246,76 @@ const _EDGE_BATCH = (function () {
         _curveTo(g, et);
       }
       g.stroke();
-      if (grp.dash) g.restore();
     }
+  }
+
+  // Patch every edge instance's drawLine. Idempotent per edge instance: vis replaces the
+  // edgeType when an edge's options change (a hovered edge gets its arrowhead back), so the
+  // patch has to be re-applied to the new instances after a data change.
+  function _patch() {
+    const es = network.body && network.body.edges;
+    if (!es) return;
+    for (const id in es) {
+      const et = es[id] && es[id].edgeType;
+      if (!et || et.__leanBatch) continue;
+      const orig = et.drawLine;
+      et.__leanBatch = orig;
+      et.drawLine = function (ctx, values, sel, hov, via) {
+        // Selected and hovered edges keep vis's own draw: the batch knows the colour and
+        // the width, but not the selection highlight or the arrowhead.
+        if (sel || hov || this.__leanDash || _arrowed(this)) { orig.call(this, ctx, values, sel, hov, via); return; }
+        if (_drawn) return;          // the other 3875 edges are already on the canvas
+        _drawn = true;
+        try { _drawAll(ctx); return; } catch (err) {
+          _errors++;
+          if (_errors > 2) { _uninstall(); }
+        }
+        orig.call(this, ctx, values, sel, hov, via);
+      };
+    }
+  }
+
+  function _install() {
+    if (_installed || !_build()) return;
+    _patch();
+    _installed = true;
+  }
+
+  function _uninstall() {
+    if (!_installed) return;
+    try {
+      const es = network.body && network.body.edges;
+      for (const id in es) {
+        const et = es[id] && es[id].edgeType;
+        if (!et || !et.__leanBatch) continue;
+        delete et.drawLine;          // back to the prototype implementation
+        delete et.__leanBatch;
+      }
+    } catch (e) {}
+    _installed = false;
+    _groups = null;
+    _drawn = false;
   }
 
   function _set(on) {
-    if (on) {
-      if (_installed || !_build()) return;
-      const es = network.body.edges;
-      for (const id in es) {
-        const et = es[id] && es[id].edgeType;
-        if (!et || et.__leanBatch) continue;
-        const orig = et.drawLine;
-        et.__leanBatch = orig;
-        et.drawLine = function (ctx, values, sel, hov, via) {
-          if (_drawn) return;          // the other 3875 edges are already on the canvas
-          _drawn = true;
-          try { _drawAll(ctx); return; } catch (err) {
-            _errors++;
-            if (_errors > 2) { _set(false); }
-          }
-          orig.call(this, ctx, values, sel, hov, via);
-        };
-      }
-      _installed = true;
-    } else if (_installed) {
-      try {
-        const es = network.body && network.body.edges;
-        for (const id in es) {
-          const et = es[id] && es[id].edgeType;
-          if (!et || !et.__leanBatch) continue;
-          delete et.drawLine;          // back to the prototype implementation
-          delete et.__leanBatch;
-        }
-      } catch (e) {}
-      _installed = false;
-      _groups = null;
-      _drawn = false;
-    }
+    // With the batch installed at rest (L12) the gesture flag has nothing left to change:
+    // it is already drawing every edge, and uninstalling on release would undo the win.
+    if (_rest) return;
+    if (on) _install(); else _uninstall();
   }
 
-  return { set: _set, frame: function () { _drawn = false; } };
+  return {
+    set: _set,
+    setRest: function (on) {
+      _rest = !!on;
+      if (_rest) _install(); else _uninstall();
+    },
+    dirty: function () { _dirty = true; },
+    frame: function () {
+      _drawn = false;
+      if (_dirty && _installed) { _dirty = false; _build(); _patch(); }
+    },
+  };
 })();
 
 function _setLean(on, redraw) {
@@ -308,6 +354,15 @@ function _setLean(on, redraw) {
 }
 // One batched edge pass per frame: afterDrawing fires once per vis draw.
 network.on('afterDrawing', function () { _EDGE_BATCH.frame(); });
+// L12 (#perf): the batched pass is cheaper than one stroke per edge, so on dense graphs
+// (arrowheads already deferred) it stays installed at rest instead of only during a
+// gesture. Any data change - legend toggle, arrow reveal, theme - can change a group key
+// or replace edge instances, so mark the cache dirty and let the next frame rebuild it.
+_EDGE_BATCH.setRest(_REST_EDGE_BATCH);
+try {
+  nodesDS.on('*', function () { _EDGE_BATCH.dirty(); });
+  edgesDS.on('*', function () { _EDGE_BATCH.dirty(); });
+} catch (e) {}
 network.on('dragStart', function () { _draggingNow = true; _setLean(true); });
 network.on('dragEnd', function () { _draggingNow = false; _setLean(false, true); });
 // vis emits no zoom start/end, so lean for the duration of the zoom and restore once
@@ -653,6 +708,13 @@ def _html_script(nodes_json: str, edges_json: str, legend_json: str,
         " _savePositions(); });"
     )
     baked_fit_js = "try { network.fit({ animation: false }); } catch (e) {}" if baked else ""
+    # L12 (#perf): keep the batched edge pass installed at rest. It is only worth it, and
+    # only safe by default, when the arrowheads are already deferred to hover: an edge that
+    # draws its arrowhead cannot come out of the batch (see _arrowed in _LEAN_GESTURE_JS).
+    lean_js = ""
+    if lean_gestures:
+        rest_batch = "true" if defer_arrows else "false"
+        lean_js = "const _REST_EDGE_BATCH = " + rest_batch + ";\n" + _LEAN_GESTURE_JS
     return f"""<script>
 const RAW_NODES = {nodes_json};
 const RAW_EDGES = {edges_json};
@@ -712,7 +774,7 @@ const network = new vis.Network(container, {{ nodes: nodesDS, edges: edgesDS }},
   edges: {{ smooth: {{ type: 'continuous', roundness: 0.2 }}, selectionWidth: 3 }},
 }});
 {_POSITION_CACHE_JS}
-{_LEAN_GESTURE_JS if lean_gestures else ''}
+{lean_js}
 
 // Theme toggle (#3894): Light / Dark / System, persisted in localStorage.
 const THEME_KEY = 'graphify-theme';

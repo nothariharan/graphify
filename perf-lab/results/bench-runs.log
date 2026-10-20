@@ -18,3 +18,44 @@
 2026-10-20 12:11:40+0530	11.6s	exit=0	L13: control - does hoverNode fire on the HEAD baseline page?	node harness/_zt_hover6.mjs view/before.html
 2026-10-20 12:12:18+0530	19.8s	exit=0	L13: final zoom+hover health on the shipped v8 artifact, with screenshot	node harness/probe_zoom_health.mjs --file view/after.html --shot shots/zoomhealth-shipped.png
 2026-10-20 12:12:48+0530	20.5s	exit=0	L13: final zoom+hover health, restore included	node harness/probe_zoom_health.mjs --file view/after.html --shot shots/zoomhealth-shipped.png
+2026-10-20 15:34:28+0530	16.4s	exit=0	L12: smoke the rest-batch variant before measuring	node harness/smoke_view.mjs --file variants/L12-rest-batch.html
+2026-10-20 15:34:43+0530	11.1s	exit=0	L12: at-rest pixel parity, batch vs vis per-edge draw, same camera	node harness/probe_rest_pixels.mjs --file variants/L12-rest-batch.html --shot shots/L12-rest.png
+2026-10-20 15:35:28+0530	15.8s	exit=0	L12: parity + coverage of the rest batch (every edge in a group?)	node harness/probe_rest_pixels.mjs --file variants/L12-rest-batch.html --shot shots/L12-rest.png
+2026-10-20 15:36:19+0530	33.7s	exit=0	L12: edge coverage of the rest batch	node harness/probe_rest_pixels.mjs --file variants/L12-rest-batch.html --shot shots/L12-rest.png
+2026-10-20 15:40:51+0530	259.6s	exit=0	L12: interleaved rest+hover frame A/B, v8 vs rest-batch, 3 rounds	node harness/ab_rest.mjs --variants v8=variants/base-ours-v8.html,rest=variants/L12-rest-batch.html --rounds 3 --frames 60 --out results/ab-rest-L12.csv
+2026-10-20 15:45:25+0530	211.3s	exit=0	L12: rest+hover A/B with synchronous draw cost, 3 rounds	node harness/ab_rest.mjs --variants v8=variants/base-ours-v8.html,rest=variants/L12-rest-batch.html --rounds 3 --frames 40 --out results/ab-rest-L12.csv
+2026-10-20 15:45:55+0530	15.0s	exit=0	L12: probe the synchronous draw API + idle rAF floor	node harness/_zt_draw.mjs variants/L12-rest-batch.html
+2026-10-20 15:47:08+0530	17.9s	exit=0	L12: parity with all edges solid, to isolate the dash-phase residual	node harness/probe_rest_pixels.mjs --file variants/L12-rest-batch.html --solid 1 --shot shots/L12-rest-solid.png
+2026-10-20 15:48:04+0530	13.7s	exit=0	L12: parity control with every edge solid (isolates dash phase)	node harness/probe_rest_pixels.mjs --file variants/L12-rest-batch-solid.html --shot shots/L12-rest-solid.png
+2026-10-20 15:48:50+0530	16.3s	exit=0	L12: locate the parity residual (which cells of the canvas differ)	node harness/probe_rest_pixels.mjs --file variants/L12-rest-batch-solid.html
+2026-10-20 15:49:53+0530	19.1s	exit=0	L12: dump the parity diff mask to see what differs	node harness/probe_rest_pixels.mjs --file variants/L12-rest-batch-solid.html --dump 1
+2026-10-20 15:50:46+0530	15.5s	exit=0	L12: mono-colour control - is the residual only stroke overlap order?	node harness/probe_rest_pixels.mjs --file variants/L12-rest-batch.html --mono 1
+2026-10-20 15:52:04+0530	16.4s	exit=0	L12: cost of one group rebuild (what a hover or legend toggle pays)	node harness/_zt_rebuild.mjs variants/L12-rest-batch.html
+2026-10-20 15:55:01+0530	16.4s	exit=0	L12: smoke the v9 artifact (rest batch in the exporter)	node harness/smoke_view.mjs --file variants/base-ours-v9.html
+2026-10-20 15:55:27+0530	19.3s	exit=0	L12: at-rest pixel parity on the shipped v9 artifact	node harness/probe_rest_pixels.mjs --file variants/base-ours-v9.html --dump 1
+2026-10-20 15:55:55+0530	13.9s	exit=0	L12: at-rest pixel parity on v9, disable via the shipped setRest API	node harness/probe_rest_pixels.mjs --file variants/base-ours-v9.html --dump 1
+2026-10-20 15:56:29+0530	16.5s	exit=1	L12: arrows on hover, edge selection, legend filter, theme - capability and cache invalidation	node harness/probe_capabilities.mjs --file variants/base-ours-v9.html --shot shots/L12-arrow.png
+2026-10-20 15:57:15+0530	29.0s	exit=0	L12: arrows on hover, edge selection, legend filter, theme - capability and cache invalidation	node harness/probe_capabilities.mjs --file variants/base-ours-v9.html --shot shots/L12-arrow.png
+2026-10-20 15:57:57+0530	23.8s	exit=0	L12: debug legend DOM + selection repaint on v9	node harness/_zt_cap.mjs variants/base-ours-v9.html
+2026-10-20 15:58:34+0530	19.5s	exit=0	L12: is the selection pixel diff a camera move or a draw change?	node harness/_zt_sel.mjs variants/base-ours-v9.html
+2026-10-20 15:59:19+0530	23.0s	exit=0	L12: arrows/selection/filter capability and cache invalidation on v9	node harness/probe_capabilities.mjs --file variants/base-ours-v9.html --shot shots/L12-arrow.png
+2026-10-20 16:00:22+0530	40.6s	exit=0	L12: capability + cache invalidation, after letting the canvas settle	node harness/probe_capabilities.mjs --file variants/base-ours-v9.html --shot shots/L12-arrow.png
+2026-10-20 16:00:57+0530	20.2s	exit=0	L12: are consecutive idle redraws identical? (snap stability)	node harness/_zt_snaps.mjs variants/base-ours-v9.html
+2026-10-20 16:08:47+0530	0.0s	exit=0	L12: clear the stale lock left by the timed-out snap dump run	cmd /c exit 0
+2026-10-20 17:16:57+0530	50.8s	exit=0	L12: capability + cache invalidation with a settled baseline	node harness/probe_capabilities.mjs --file variants/base-ours-v9.html --shot shots/L12-arrow.png
+2026-10-20 17:17:43+0530	18.3s	exit=0	L12: does hiding nodes hide their edges, and does the batch know?	node harness/_zt_hide.mjs variants/base-ours-v9.html
+2026-10-20 17:19:19+0530	33.6s	exit=0	L12: capability + cache invalidation after the hidden-endpoint fix	node harness/probe_capabilities.mjs --file variants/base-ours-v9.html --shot shots/L12-arrow.png
+2026-10-20 17:20:16+0530	36.5s	exit=0	L12: which side paints more in the hidden-community frame	node harness/probe_capabilities.mjs --file variants/base-ours-v9.html
+2026-10-20 17:22:05+0530	25.5s	exit=0	L12: dump the hidden-state diff crop to see what moves	node harness/probe_capabilities.mjs --file variants/base-ours-v9.html --dump 1
+2026-10-20 17:23:19+0530	25.8s	exit=0	L12: settled parity control vs hidden-state parity, with dash control	node harness/probe_capabilities.mjs --file variants/base-ours-v9.html
+2026-10-20 17:24:24+0530	30.8s	exit=0	L12: settled-state parity crop (batch vs vis at rest)	node harness/probe_capabilities.mjs --file variants/base-ours-v9.html --dump 1
+2026-10-20 17:25:24+0530	25.5s	exit=0	L12: settled parity with every edge solid - is the residual the dash phase?	node harness/probe_capabilities.mjs --file variants/base-ours-v9.html --nodash 1
+2026-10-20 17:26:24+0530	21.3s	exit=0	L12: settled parity after per-edge dash phase	node harness/probe_capabilities.mjs --file variants/base-ours-v9.html
+2026-10-20 17:27:13+0530	14.5s	exit=0	L12: where does an edge's dash setting actually live in vis 9?	node harness/_zt_dashes.mjs variants/base-ours-v9.html
+2026-10-20 17:27:54+0530	11.4s	exit=0	L12: how many dash groups does the batch build, and how many strokes per frame?	node harness/_zt_groups.mjs variants/base-ours-v9.html
+2026-10-20 17:29:47+0530	51.1s	exit=0	L12: settled parity with dashed edges handed back to vis	node harness/probe_capabilities.mjs --file variants/base-ours-v9.html
+2026-10-20 17:30:41+0530	23.7s	exit=0	L12: settled parity - painted counts, to tell width from positioning	node harness/probe_capabilities.mjs --file variants/base-ours-v9.html
+2026-10-20 17:34:48+0530	230.7s	exit=0	L12: interleaved rest+hover A/B, v8 (gesture-only batch) vs v9 (batch at rest), 3 rounds	node harness/ab_rest.mjs --variants v8=variants/base-ours-v8.html,v9=variants/base-ours-v9.html --rounds 3 --frames 40 --out results/ab-rest-L12.csv
+2026-10-20 17:37:05+0530	100.9s	exit=0	L12: zoom/hover/lean all together on v9	node harness/probe_zoom_health.mjs --file variants/base-ours-v9.html
+2026-10-20 17:37:36+0530	25.7s	exit=0	L12: zoom/hover/lean together on v9 (full report)	node harness/probe_zoom_health.mjs --file variants/base-ours-v9.html
+2026-10-20 17:38:21+0530	15.3s	exit=0	L12: smoke the shipped view after.html (v9)	node harness/smoke_view.mjs --file view/after.html

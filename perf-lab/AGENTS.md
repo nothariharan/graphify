@@ -42,9 +42,9 @@ behave worse is a regression.
 7. **Never `--use-gl=swiftshader`** for a WebGL measurement, and never treat a single run's
    absolute fps as a result (§4).
 
-## 3. Where things stand (shipped in the exporter, working tree `b17c3797`)
+## 3. Where things stand (shipped in the exporter, working tree `bc6f2ee8`)
 
-`graphify/exporters/html.py` — sha256 `b17c3797bae7ab88f1761acd6a2c585b4d979b9f77dd7afe25cd061abe52ac9e`
+`graphify/exporters/html.py` — sha256 `bc6f2ee823d4fb087af866d20ef1938f35b2ffab4d823f61beb82c1ca81c481f`
 (uncommitted at the time of writing; the last commit that touched it is `716c421e`).
 
 | lever | what it does | gate |
@@ -53,7 +53,7 @@ behave worse is a regression.
 | layout cache | the stabilized x/y are cached so a re-open skips the solver | always |
 | pre-baked positions | physics off + no solver + fit when every node carries x/y (consumed since `716c421e`; nothing emits them yet) | all nodes have x/y |
 | border lean | during a drag/zoom the node border stroke is dropped and restored on release | >800 nodes (`LEAN_GESTURE_NODE_THRESHOLD`) |
-| batched edge pass | for the length of a gesture, `edgeType.drawLine` is replaced per edge by **one draw of every edge**, grouped by (colour, dashes, base width); 3876 strokes → 20 on rsl | same gate as the lean |
+| batched edge pass | **for the whole session** on dense graphs, `edgeType.drawLine` is replaced per edge by **one draw of every edge**, grouped by (colour, base width); 3876 strokes → 20 on rsl. Dashed (confidence) edges, selected/hovered edges and arrow-bearing edges still go to vis. L12 | same gate as the lean (`_REST_EDGE_BATCH`) |
 | curve fidelity | the batch draws the same quadratic vis draws at rest (`_curveTo` reproduces `_getViaCoordinates` for `continuous`), verified against `edgeType.getViaNode()` on all 3876 edges, worst disagreement 0.0 | — |
 | eased zoom (L13) | wheel events accumulate a target scale, one redraw per rAF frame, the world point under the cursor held fixed, clamped `fit/6 … min(2.0, fit*12)`; vis's own wheel handler bypassed | same gate as the lean |
 | hover focus (L13) | hovered node + 1-hop keep their colour, the rest blend 55% toward `--bg`; written on the node instances (never `nodesDS.update`), restored on blur | same gate as the lean |
@@ -65,14 +65,22 @@ HEAD build): **node drag 40.4 → 82.9 fps (x2.05), pan 39.1 → 78.9 (x2.02), z
 (x5.29)**, stalled frames (>33 ms) 13/14/91 per 90 → 1/1/0. Across all certified runs of this
 lever the paired ratio spans **x1.7–x5.8**.
 
-Shipped artifact: `variants/base-ours-v8.html` (1972184 bytes, sha256
-`c09d310fb6036da7d2a3e5c230c4e72eefaf6c284ed4f0f33299111f41b357c8`). Regenerate it
+Shipped artifact: `variants/base-ours-v9.html` (1974875 bytes, sha256
+`aae382be2cda0fd142dea77ce656b5f1886bda2f46bd3527d259cf7628466f34`). Regenerate it
 from the working tree with:
 ```powershell
-python harness/build_base.py --graph-json ../worked/rsl-siege-manager/graph.json --name ours-v8
+python harness/build_base.py --graph-json ../worked/rsl-siege-manager/graph.json --name ours-v9
 ```
 If your regenerated artifact's exporter-block hash differs from the above, the exporter moved:
 say so in `LOG.md`, and re-measure before quoting any number in this file.
+
+L12 certified on this artifact (`results/ab-rest-L12.csv`, interleaved 3 rounds, v8 vs v9):
+rest p50 85.0 → 79.9 ms (x0.94), hover 88.0 → 73.8 ms (x0.84), all six pairs favour v9. At-rest
+parity **10.22% of painted pixels differ, colour only** — the batch changes which translucent
+edge is on top at a crossing (coverage equal to ±4 px of 143 k; the nodash control, same order
+both sides, is 1.61%). Capability probe on v9: arrow 103 px, selection 172 px → 0 on deselect,
+legend toggle matches vis (edges of hidden nodes are skipped via both-endpoints-visible, which
+is vis's own rule). Flip `_REST_EDGE_BATCH = false` for pixel-identical rest.
 
 L13 certified on this artifact (`results/L13-zoomhealth-v8.txt`): zoom in p50 16.9 / p95 29.1
 / max 105.7 ms, 3 stalls >33 ms per 98 frames, 0 >250 ms; zoom out p50 21.8 / p95 30.8. Lean
@@ -155,6 +163,7 @@ Done: **L1** offline/CDN, **L2** load+physics, **L3** edge render, **L4** labels
 **L5** huge graphs, **L6** exporter integration, **L8** gesture latency, **L9** node draw
 (no lever), **L10** pre-baked positions (consumed, `--bake` flag outstanding),
 **L11** viewer experience (folded into the exporter as `_UX_JS` by L13),
+**L12** edge batch at rest (shipped; x0.94 rest / x0.84 hover, colour-only ordering diff),
 **L13** interaction feel (eased zoom, hover focus, colour-preserving selection).
 Parked: **L7** WebGL/sigma (numbers were great — pan 4.8 → 90-110 fps — but the user rejected
 the look and it needs a full rewrite). Do not reopen L7 unless the user asks.
@@ -166,8 +175,6 @@ hypothesis in it *before* you measure.
   runs; baking positions measured 1.3 s (x0.13) with the 200-iteration layout intact
   (`results/ab-load-L13.csv`). The exporter already consumes x/y; what is missing is a
   headless-browser step at export time that writes them into the node data.
-- **L12 — keep the edge batch on at rest.** The resting frame is 5762 strokes; the batch draws
-  the same curves in 20. Closed L9 proposed it; nobody has measured it yet.
 - **L5 (revisit) — beyond canvas 2D.** 9142-node graphs are unusable at any setting. Aggregate
   view exists; the honest alternatives are a bundled/edge-summarised low-zoom view (capability
   returns on zoom-in) or WebGL (rejected).
@@ -208,8 +215,18 @@ hypothesis in it *before* you measure.
   `lineTo` and stroked at lineWidth 3.63).
 - Edge `lineWidth` must be re-derived per frame as `max(baseWidth, 0.3/scale)`; the floor moves
   with the zoom.
-- `setLineDash` is per-path, not per-subpath, so grouping dashed edges shifts their dash phase
-  (this is the residual 1-2% in the pixel diff). Still dashes, still the same colour.
+- `setLineDash` restarts at every `moveTo`, so grouping dashed edges does **not** shift the
+  dash phase. The 10% at-rest pixel diff of the edge batch is stroke *order*: at a crossing the
+  top-most translucent edge wins, and colour grouping changes who wins. Geometry/width/colour
+  are exact (nodash control: 1.61%, which is only overlap). Do not chase the dash theory again.
+- vis skips an edge when the edge **or either endpoint node** is hidden
+  (`Body._updateVisibleIndices`), and `edge.getFormattingValues().hidden` does not reflect a
+  hidden endpoint. A cached batch must check `e.from.options.hidden || e.to.options.hidden`
+  or a legend toggle leaves orphan edges painted (364 of them on rsl).
+- A fresh page's first two idle frames differ from the settled frame by ~40 k px (one delayed
+  pass on the 3rd draw, camera unchanged). Any pixel probe must settle past it, and a probe
+  that compares "immediately after an option flip" can understate a diff by measuring a frame
+  that has not been redrawn yet — give each side ~350 ms and a real redraw.
 - vis does not redraw on pointer-up (0 canvas strokes in the 20 frames after release), so a
   restore needs an explicit redraw.
 - Padding/viewport size changes the on-screen content, so `pan_fps`-style numbers are only
@@ -231,8 +248,8 @@ hypothesis in it *before* you measure.
 
 1. Read this file, `STATE.md` tick status, the last 20 lines of `LOG.md`, the tail of `DECISIONS.tsv`.
 2. `python harness/bench_lock.py status`.
-3. Confirm the shipped artifact is current: rebuild `base-ours-v8.html` and compare the
+3. Confirm the shipped artifact is current: rebuild `base-ours-v9.html` and compare the
    exporter block against the hash above.
-4. `python -m pytest tests/test_html_perf_levers.py -q` (from the repo root) — 27 tests, all
+4. `python -m pytest tests/test_html_perf_levers.py -q` (from the repo root) — 31 tests, all
    green, before you change anything.
 5. Pick a lane from §6 or the next `STATE.md` item, write the lane doc, then measure.

@@ -169,6 +169,18 @@ physics off), (3) keep capability. Aesthetics levers (straight/discrete) optiona
     Every agent uses lane-prefixed filenames and must not touch `graphify/exporters/html.py`;
     the loop owner integrates a winner only after its lane doc + CSV + parity proof exist.
 
+17. [DONE 2026-10-20] L12 - the edge batch stays installed at rest (`_REST_EDGE_BATCH`, rsl
+    v9). Rest p50 85.0 -> 79.9 ms (x0.94), hover 88.0 -> 73.8 (x0.84), all six interleaved
+    pairs favour it (`results/ab-rest-L12.csv`, 3 rounds). Two corrections came out of the
+    lane: (a) vis hides an edge when the edge **or either endpoint node** is hidden, so the
+    cached batch was painting the 364 orphan edges of a legend-hidden community - `_build` now
+    applies vis's own rule; (b) the "grouping shifts the dash phase" explanation in item 12 and
+    in the old trap list is **wrong** (dashes restart at every subpath). The real at-rest
+    residual is stroke order: 10.22% of painted pixels differ in colour only (coverage equal
+    to +-4 px of 143 k; nodash control 1.61%). Dashed edges are now drawn by vis again. Lane
+    `lanes/L12-rest-batch.md`, capability probe `results/zoom-health-L12.txt` (zoom/lean/batch
+    coexist, 0 dimmed, 0 errors), 31/31 tests, artifact `base-ours-v9.html` (`aae382be`).
+
 ## Tick status
 2026-10-20 (ticks 1-6, idle — no measurement, no code change): six ticks with no direction on
 `--bake`. Item (a) in the brief is stale — the UX block has shipped as `_UX_JS` since
@@ -177,6 +189,19 @@ Chrome to the export path) or a separate `graphify bake` command (export stays
 dependency-free). Nothing else on the board is adoptable without a decision: L12 would change
 the resting frame, L5 revisit is beyond canvas 2D. Bench lock free, exporter at `b17c3797`,
 loop armed. Per-tick lines in `LOG.md`.
+
+2026-10-20 (L12 shipped — measured, ported, certified): user said "work on those", so L12
+(the edge batch at rest) ran the full lane. Result: rest p50 85.0 → 79.9 ms (x0.94), hover
+88.0 → 73.8 (x0.84), all six interleaved pairs favour the batch (`results/ab-rest-L12.csv`).
+Capability probe on v9 green: arrow 103 px, selection 172 px → 0 on deselect, legend toggle
+matches vis, restore 0 px. Two real bugs caught on the way: the batch kept painting the 364
+edges of a hidden community (`vis` needs both endpoints visible; fixed in `_build`) and the
+documented "dash phase" trap was wrong. At-rest parity is **10.2% of painted pixels, colour
+only** (coverage equal to ±4 px of 143 k) because grouping changes which translucent edge wins
+at a crossing — the nodash control, same order both sides, is 1.61%. Documented in the lane
+with the `_REST_EDGE_BATCH = false` switch. 31/31 tests, view rebuilt + smoke clean, artifact
+`base-ours-v9.html` (`aae382be`), exporter `bc6f2ee8`. Remaining blocker unchanged: `--bake`
+needs the user's packaging choice. Bench lock free, loop armed.
 
 2026-10-20 (idle tick, awaiting user — no measurement, no code change):
 The tick brief listed (a) fold the L11 UX block and (b) `--bake` as the remaining decisions, but

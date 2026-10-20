@@ -196,18 +196,19 @@ def test_dense_graph_batches_the_edge_pass(tmp_path):
     assert "_groups.push(grp)" in html
 
 
-def test_edge_batch_groups_by_colour_dash_and_width(tmp_path):
+def test_edge_batch_groups_by_colour_and_width_and_leaves_dashes_to_vis(tmp_path):
     """Grouping by anything less than what vis varies per edge would silently repaint
     edges: a single-colour batch measured x1.2 faster but dumped every edge in one
-    colour."""
+    colour. Dashed edges are excluded from the batch instead of grouped - confidence
+    texture has to come out exactly as vis draws it."""
     html, _ = _render(tmp_path, 900, 3)
-    assert "const key = col + '|' + (dash ? dash.join(',') : '') + '|' + baseW;" in html
+    assert "const key = col + '|' + baseW;" in html
     # resolved exactly the way the draw path resolves them
     assert "col = e.edgeType.getColor(_ctx, t);" in html
     assert "t = e.getFormattingValues();" in html
-    assert "const dash = _dashOf(t);" in html
-    # dashed (confidence) edges keep their pattern inside the batch
-    assert "g.setLineDash(grp.dash);" in html
+    assert "if (_dashOf(t)) { e.edgeType.__leanDash = true; continue; }" in html
+    assert "this.__leanDash" in html
+    # the pattern itself is still recognised as the one vis uses
     assert "return d === true ? [5, 5] : d;" in html
 
 
@@ -247,18 +248,63 @@ def test_edge_batch_draws_the_resting_curve(tmp_path):
     assert "if (C <= I) vx = (fx <= tx) ? (tx < vx ? tx : vx) : (tx > vx ? tx : vx);" in html
 
 
-def test_edge_batch_is_removed_on_release(tmp_path):
-    """The patch must be undone the moment the gesture ends, and the batch reset per
-    frame via vis's own afterDrawing event."""
+def test_edge_batch_uninstalls_and_always_has_a_fallback(tmp_path):
+    """The patch can be undone, and the batch is reset per frame via vis's own
+    afterDrawing event."""
     html, _ = _render(tmp_path, 900, 3)
     assert "delete et.drawLine;" in html
     assert "delete et.__leanBatch;" in html
     assert "network.on('afterDrawing', function () { _EDGE_BATCH.frame(); });" in html
     # a throwing batch falls back to vis's own draw instead of a blank canvas
-    assert "if (_errors > 2) { _set(false); }" in html
+    assert "if (_errors > 2) { _uninstall(); }" in html
     assert "orig.call(this, ctx, values, sel, hov, via);" in html
     # gesture lifecycle drives it alongside the border lean
     assert "_EDGE_BATCH.set(on);" in html
+
+
+def test_dense_graph_keeps_the_edge_batch_at_rest(tmp_path):
+    """L12: on a dense graph (arrowheads deferred) the batched pass is installed for the
+    whole session, and the gesture flag cannot uninstall it."""
+    html, _ = _render(tmp_path, 900, 3)
+    assert "const _REST_EDGE_BATCH = true;" in html
+    assert "_EDGE_BATCH.setRest(_REST_EDGE_BATCH);" in html
+    assert "if (_rest) return;" in html
+    # a data change (legend toggle, arrow reveal, theme) invalidates the cached groups
+    assert "nodesDS.on('*', function () { _EDGE_BATCH.dirty(); });" in html
+    assert "edgesDS.on('*', function () { _EDGE_BATCH.dirty(); });" in html
+    assert "if (_dirty && _installed) { _dirty = false; _build(); _patch(); }" in html
+
+
+def test_rest_batch_hands_selected_and_arrowed_edges_back_to_vis(tmp_path):
+    """Capability guard: the batch draws a plain line, so anything that needs a highlight
+    or an arrowhead must go through vis's own drawLine."""
+    html, _ = _render(tmp_path, 900, 3)
+    assert "if (sel || hov || this.__leanDash || _arrowed(this)) { orig.call(this, ctx, values, sel, hov, via); return; }" in html
+    assert "function _arrowed(et) {" in html
+    assert "a.to && a.to.enabled === true" in html
+    # dashed edges (confidence) are not batched either: vis draws them, exactly as at rest
+    assert "if (_dashOf(t)) { e.edgeType.__leanDash = true; continue; }" in html
+    # and re-applied after vis replaces an edgeType on a data change
+    assert "et.__leanBatch = orig;" in html
+    assert "_patch();" in html
+
+
+def test_rest_batch_skips_edges_of_hidden_nodes(tmp_path):
+    """vis draws an edge only when the edge and both endpoints are visible. Legend
+    filtering hides nodes, so the cached batch has to apply the same rule or it keeps
+    drawing the orphan edges of a filtered community."""
+    html, _ = _render(tmp_path, 900, 3)
+    assert "e.from && e.from.options" in html
+    assert "(e.options && e.options.hidden) || (fo && fo.hidden) || (to && to.hidden)" in html
+
+
+def test_big_sparse_graph_keeps_vis_drawing_edges_at_rest(tmp_path):
+    """A big-but-sparse graph shows arrowheads at rest, so the batch cannot draw its edges
+    and the rest install stays off (the gesture batch still exists)."""
+    html, edges = _render(tmp_path, LEAN_GESTURE_NODE_THRESHOLD + 100, 1)
+    assert edges < ARROW_DEFER_EDGE_THRESHOLD
+    assert "const _REST_EDGE_BATCH = false;" in html
+    assert "const _EDGE_BATCH = (function ()" in html
 
 
 def test_lean_is_size_gated_not_edge_gated(tmp_path):
