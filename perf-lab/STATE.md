@@ -170,16 +170,13 @@ physics off), (3) keep capability. Aesthetics levers (straight/discrete) optiona
     the loop owner integrates a winner only after its lane doc + CSV + parity proof exist.
 
 ## Tick status
-2026-10-20 (tick 3, idle — no measurement, no code change): still no direction on `--bake`.
-Nothing else on the board can move without a decision either (L12 would change the resting
-frame). Waiting on: Node-at-export vs separate `graphify bake` command. Bench lock free,
-exporter at `b17c3797`, loop armed.
-
-2026-10-20 (tick 2, idle — no measurement, no code change): no direction on `--bake` since the
-last tick. The tick brief's item (a) is stale: the UX block has been in the exporter as
-`_UX_JS` since `114e05e1`. Still waiting on the (b) choice — Node-at-export (fast files, adds
-Node + Chrome to the export path) vs a separate `graphify bake` command (dependency-free
-export). Bench lock free, exporter at `b17c3797`, loop armed.
+2026-10-20 (ticks 1-4, idle — no measurement, no code change): four ticks with no direction on
+`--bake`. Item (a) in the brief is stale — the UX block has shipped as `_UX_JS` since
+`114e05e1`. Blocked on one choice: bake inside `graphify html` (fast by default, adds Node +
+Chrome to the export path) or a separate `graphify bake` command (export stays
+dependency-free). Nothing else on the board is adoptable without a decision: L12 would change
+the resting frame, L5 revisit is beyond canvas 2D. Bench lock free, exporter at `b17c3797`,
+loop armed. Per-tick lines in `LOG.md`.
 
 2026-10-20 (idle tick, awaiting user — no measurement, no code change):
 The tick brief listed (a) fold the L11 UX block and (b) `--bake` as the remaining decisions, but
