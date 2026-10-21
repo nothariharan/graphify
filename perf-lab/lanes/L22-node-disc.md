@@ -54,18 +54,34 @@ ring), `ab_rest.mjs` (interleaved rest + hover A/B).
 
 ## Results
 
-Interleaved 3 rounds, `results/ab-rest-L22-shipped.csv`, v10 (shipped) vs v11 (this lane):
+Interleaved 3 rounds, `results/ab-rest-L22-v12.csv`, v10 (shipped) vs v12 (this lane):
 
-| | v10 | v11 | ratio |
+| | v10 | v12 | ratio |
 |---|---|---|---|
-| rest frame p50 | 93.5 ms | 22.6 ms | **x0.24** |
-| hover cycle p50 | 85.6 ms | 21.5 ms | **x0.25** |
+| rest frame p50 | 84.0 ms | 27.9 ms | **x0.33** |
+| hover cycle p50 | 85.6 ms | 29.1 ms | **x0.34** |
 
-Per round: rest 87.7 -> 19.4, 94.4 -> 22.6, 93.5 -> 27.5; hover 92.9 -> 21.5, 83.8 -> 20.8,
-85.6 -> 29.3. All six pairs favour the new build. A scratch variant measured the same way
-(`results/ab-rest-L22.csv`): rest 85.1 -> 28.2, hover 81.3 -> 27.7.
+Per round: rest 84.0 -> 27.4, 79.6 -> 27.9, ~85 -> 28.7; hover 85.6 -> 28.8, 88.4 -> 29.3,
+83.6 -> 29.1. All six pairs favour the new build. The scratch variant measured the same
+way (`results/ab-rest-L22.csv`): rest 85.1 -> 28.2, hover 81.3 -> 27.7.
 
-Capability on the shipped artifact (`variants/base-ours-v11.html`):
+Gestures, interleaved 3 rounds against the previous shipped state in the same session
+(`results/ab-rsl-v8-v12.csv`, v8 = the lean/edge-batch build, v12 = this lane):
+
+| gesture | v8 | v12 | ratio | jank >33 ms |
+|---|---|---|---|---|
+| node drag | 28.2 fps | 34.9 fps | x1.24 | 44 -> 21 |
+| pan | 25.2 fps | 33.9 fps | x1.35 | 60 -> 27 |
+| zoom | 30.8 fps | 30.3 fps | x0.98 | 52 -> 50 |
+
+The first attempt (v11) removed the lean entirely, because with the border gone there
+seemed to be nothing left to drop. That was wrong: a **drag measured 33% slower** without
+it (`results/ab-rsl-v8-v11.csv`, node drag 37.7 -> 25.3 fps, jank 17 -> 67). The lean is
+not about the border, it is about the *size* of the disc: a drag draws the small discs, and
+the small discs are cheaper. So the lean now shrinks the fill instead of dropping a
+stroke, which keeps the old look and the old speed (v12 above).
+
+Capability on the shipped artifact (`variants/base-ours-v12.html`):
 
 | check | result |
 |---|---|
@@ -81,12 +97,12 @@ paint, 1147 that only v11 paints (0.6 px per node). The nodes are 1-2 px at the 
 and the difference is the anti-aliased edge of a dot: a fill's edge against a stroke's edge.
 Screenshots `shots/L22-v11-rest.png` and `shots/L17-ref-v10.png` show the same picture.
 
-The lean lever is now redundant and was removed: with the border gone for good there is
-nothing to drop for the length of a gesture, which also means the nodes no longer change
-size when the pointer goes down (they used to halve at the fit scale while a drag was live).
+The disc follows the zoom, because the border it replaces was a screen-constant width:
+at the fit scale the size is 22.4 (11.2 + 11.2), at scale 0.5 it is 14.2 (11.2 + 3), at
+scale 2 it is 11.95 (11.2 + 0.75) - exactly the disc vis draws at every level.
 
 ## Verdict
 
 Ship it. The resting frame and every interaction that repaints it (hover, selection, a
-legend toggle) are about **4x faster** on the same picture, and one more source of jank -
-the nodes shrinking and growing at drag start and end - is gone.
+legend toggle) are about **3x faster** on the same picture, and the gestures are 1.2-1.35x
+faster than the build they replace.

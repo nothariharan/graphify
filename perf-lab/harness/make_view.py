@@ -29,6 +29,6 @@ def localize(src, dst, label):
 
 localize(os.path.join(LAB, "variants", "base-rsl-head.html"),
          os.path.join(VIEW, "before.html"), "CURRENT (main/HEAD)")
-localize(os.path.join(LAB, "variants", "base-ours-v11.html"),
-         os.path.join(VIEW, "after.html"), "OURS (v11: + node disc without border stroke)")
+localize(os.path.join(LAB, "variants", "base-ours-v12.html"),
+         os.path.join(VIEW, "after.html"), "OURS (v12: + node disc without border stroke)")
 print("wrote", VIEW)

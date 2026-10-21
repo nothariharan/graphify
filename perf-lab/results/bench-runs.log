@@ -112,3 +112,10 @@
 2026-10-21 17:43:52+0530	23.3s	exit=0	L22: at-rest edge parity on v11	node harness/probe_rest_pixels.mjs --file variants/base-ours-v11.html
 2026-10-21 17:44:22+0530	16.9s	exit=0	L22: smoke the shipped view (v11)	node harness/smoke_view.mjs --file view/after.html
 2026-10-21 17:47:31+0530	17.6s	exit=0	L22: does the node size follow the zoom?	node harness/_dbg_zoomsize.mjs variants/base-ours-v11.html
+2026-10-21 17:52:39+0530	258.1s	exit=0	L22: certify the gestures on v11 (drag, pan, zoom) against the shipped renderer	node harness/ab_drag.mjs --variants before=variants/base-rsl-head.html,v11=variants/base-ours-v11.html --rounds 3 --gestures node,pan,zoom --steps 90 --out results/ab-rsl-v11-certified.csv
+2026-10-21 17:57:08+0530	254.2s	exit=0	L22: v8 vs v11 gestures in one session (the lean was removed, so re-certify)	node harness/ab_drag.mjs --variants v8=variants/base-ours-v8.html,v11=variants/base-ours-v11.html --rounds 3 --gestures node,pan,zoom --steps 90 --out results/ab-rsl-v8-v11.csv
+2026-10-21 18:02:25+0530	243.5s	exit=0	L22: v8 vs v12 gestures in one session (the lean shrinks the disc again)	node harness/ab_drag.mjs --variants v8=variants/base-ours-v8.html,v12=variants/base-ours-v12.html --rounds 3 --gestures node,pan,zoom --steps 90 --out results/ab-rsl-v8-v12.csv
+2026-10-21 18:06:03+0530	205.8s	exit=0	L22: rest+hover A/B on v12 (the lean must not cost anything at rest)	node harness/ab_rest.mjs --variants v10=variants/base-ours-v10.html,v12=variants/base-ours-v12.html --rounds 3 --frames 40 --out results/ab-rest-L22-v12.csv
+2026-10-21 18:06:37+0530	25.5s	exit=0	L22: capability probe on v12	node harness/probe_capabilities.mjs --file variants/base-ours-v12.html
+2026-10-21 18:06:56+0530	19.1s	exit=0	L22: white selection ring on v12 (real click)	node harness/probe_node_ring.mjs --file variants/base-ours-v12.html
+2026-10-21 18:07:31+0530	15.1s	exit=0	L22: smoke the shipped view (v12)	node harness/smoke_view.mjs --file view/after.html

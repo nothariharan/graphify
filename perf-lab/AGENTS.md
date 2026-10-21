@@ -42,9 +42,9 @@ behave worse is a regression.
 7. **Never `--use-gl=swiftshader`** for a WebGL measurement, and never treat a single run's
    absolute fps as a result (§4).
 
-## 3. Where things stand (shipped in the exporter, working tree `0db4e8ed`)
+## 3. Where things stand (shipped in the exporter, working tree `56c7de44`)
 
-`graphify/exporters/html.py` — sha256 `0db4e8ed0e3e5eaef5ed7177df2f7facd9f6b9d398feb3cfa73430d215cf8889`
+`graphify/exporters/html.py` — sha256 `56c7de44ea855e029915fcce9182878128142814914ccfcff081e77f847775c2`
 (uncommitted at the time of writing; the last commit that touched it is `716c421e`).
 
 | lever | what it does | gate |
@@ -52,7 +52,7 @@ behave worse is a regression.
 | arrows on hover | dense graphs stop drawing an arrowhead per edge per frame; hover an edge/node to see direction | >1500 edges (`ARROW_DEFER_EDGE_THRESHOLD`) |
 | layout cache | the stabilized x/y are cached so a re-open skips the solver | always |
 | pre-baked positions | physics off + no solver + fit when every node carries x/y (consumed since `716c421e`; nothing emits them yet) | all nodes have x/y |
-| border lean | the node border stroke is gone for good (see *node disc* below); what is left of the lean is the gesture flag that keeps the hover focus from fighting a drag | same gate as the lean |
+| border lean | for the length of a gesture the disc is drawn at the fill radius (the border that used to grow it is gone, so the lean shrinks the fill instead). A drag measured 33% slower without it | same gate as the lean |
 | node disc without the border stroke (L22) | vis draws a node as a fill plus a border stroke of world width `min(nodeWidth, 1.5/scale)`; the border colour is the fill colour, so the same disc is drawn with **one fill** and a size grown by exactly that width. 1886 hairline strokes per frame were the biggest cost of a resting frame (86 ms → 29 ms). Hovered and selected nodes keep a real border, because theirs is white | same gate as the lean |
 | batched edge pass | **for the whole session** on dense graphs, `edgeType.drawLine` is replaced per edge by **one draw of every edge**, grouped by (colour, base width); 3876 strokes → 20 on rsl. Dashed (confidence) edges, selected/hovered edges and arrow-bearing edges still go to vis. L12 | same gate as the lean (`_REST_EDGE_BATCH`) |
 | curve fidelity | the batch draws the same quadratic vis draws at rest (`_curveTo` reproduces `_getViaCoordinates` for `continuous`), verified against `edgeType.getViaNode()` on all 3876 edges, worst disagreement 0.0 | — |
@@ -66,22 +66,24 @@ HEAD build): **node drag 40.4 → 82.9 fps (x2.05), pan 39.1 → 78.9 (x2.02), z
 (x5.29)**, stalled frames (>33 ms) 13/14/91 per 90 → 1/1/0. Across all certified runs of this
 lever the paired ratio spans **x1.7–x5.8**.
 
-Shipped artifact: `variants/base-ours-v11.html` (1977538 bytes, sha256
-`d1af8c56663504aa0863910ea0c1b83dd88f528ac9549b94d6634ee59289fce4`). Regenerate it
+Shipped artifact: `variants/base-ours-v12.html` (1977969 bytes, sha256
+`e720f6cb629a3281bc5b1fe3997224120ef3cd7c918b8910fe77530dabeacc6e`). Regenerate it
 from the working tree with:
 ```powershell
-python harness/build_base.py --graph-json ../worked/rsl-siege-manager/graph.json --name ours-v11
+python harness/build_base.py --graph-json ../worked/rsl-siege-manager/graph.json --name ours-v12
 ```
 If your regenerated artifact's exporter-block hash differs from the above, the exporter moved:
 say so in `LOG.md`, and re-measure before quoting any number in this file.
 
-L22 certified on this artifact (`results/ab-rest-L22-shipped.csv`, interleaved 3 rounds,
-v10 vs v11): rest p50 93.5 → 22.6 ms (**x0.24**), hover 85.6 → 21.5 ms (**x0.25**), all six
-pairs favour the new build. The picture is the same: cross-build pixel diff at a fixed
-camera with an identical layout is 3.02% of painted pixels, and it is the anti-aliased edge
-of a 1 px dot (0 pixels painted in v10 that v11 does not paint). The white selection ring is
-intact (446 white pixels after a real mouse click, v10: 446). L12's at-rest edge parity is
-unchanged at 9.83% of painted pixels, colour only (see the note below).
+L22 certified on this artifact (`results/ab-rest-L22-v12.csv`, interleaved 3 rounds,
+v10 vs v12): rest p50 84.0 → 27.9 ms (**x0.33**), hover 85.6 → 29.1 ms (**x0.34**), all six
+pairs favour the new build. Gestures against the build it replaces, same session
+(`results/ab-rsl-v8-v12.csv`): node drag 28.2 → 34.9 fps (x1.24, jank 44 → 21), pan
+25.2 → 33.9 fps (x1.35, jank 60 → 27), zoom 30.8 → 30.3 fps (x0.98). The picture is the same:
+cross-build pixel diff at a fixed camera with an identical layout is 3.02% of painted
+pixels, and it is the anti-aliased edge of a 1 px dot (0 pixels painted in v10 that v12 does
+not paint). The white selection ring is intact (446 white pixels after a real mouse click,
+v10: 446). L12's at-rest edge parity is unchanged at 9.83% of painted pixels, colour only.
 
 L14 certified on this artifact: an idle page draws nothing and wakes up nothing (0 draws,
 0 rAF in 3 s; before the fix 432 rAF wake-ups, because the frame HUD's loop ran for the
@@ -279,8 +281,8 @@ hypothesis in it *before* you measure.
 
 1. Read this file, `STATE.md` tick status, the last 20 lines of `LOG.md`, the tail of `DECISIONS.tsv`.
 2. `python harness/bench_lock.py status`.
-3. Confirm the shipped artifact is current: rebuild `base-ours-v11.html` and compare the
+3. Confirm the shipped artifact is current: rebuild `base-ours-v12.html` and compare the
    exporter block against the hash above.
-4. `python -m pytest tests/test_html_perf_levers.py -q` (from the repo root) — 34 tests, all
+4. `python -m pytest tests/test_html_perf_levers.py -q` (from the repo root) — 35 tests, all
    green, before you change anything.
 5. Pick a lane from §6 or the next `STATE.md` item, write the lane doc, then measure.

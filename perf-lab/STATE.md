@@ -208,6 +208,15 @@ physics off), (3) keep capability. Aesthetics levers (straight/discrete) optiona
     removed, so the nodes no longer change size when a drag starts. 34/34 tests, artifact
     `base-ours-v11.html` (`d1af8c56`), exporter `0db4e8ed`. Lane `lanes/L22-node-disc.md`.
 
+20b. [DONE 2026-10-21] L22 re-certified after the first attempt regressed the drag: v11
+    removed the lean (nothing left to drop once the border is gone) and a **drag measured
+    33% slower** (37.7 → 25.3 fps, jank 17 → 67) — the lean was never about the border, it
+    is about the *size* of the disc, and a drag draws the small discs. v12 shrinks the fill
+    for the length of a gesture instead: node drag x1.24 (jank 44 → 21), pan x1.35 (jank
+    60 → 27), zoom x0.98 against the build it replaces, and the rest frame keeps its x0.33.
+    Artifact `base-ours-v12.html` (`e720f6cb`), exporter `56c7de44`, 35/35 tests, view
+    rebuilt + smoke clean.
+
 ## Tick status
 2026-10-20 (ticks 1-6, idle — no measurement, no code change): six ticks with no direction on
 `--bake`. Item (a) in the brief is stale — the UX block has shipped as `_UX_JS` since
