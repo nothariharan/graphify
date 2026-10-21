@@ -181,6 +181,33 @@ physics off), (3) keep capability. Aesthetics levers (straight/discrete) optiona
     `lanes/L12-rest-batch.md`, capability probe `results/zoom-health-L12.txt` (zoom/lean/batch
     coexist, 0 dimmed, 0 errors), 31/31 tests, artifact `base-ours-v9.html` (`aae382be`).
 
+18. [DONE 2026-10-21] L14 — the page is quiet when nothing happens. `probe_idle.mjs` found 0
+    draws but **432 rAF wake-ups in 3 s** of silence: the frame HUD's loop ran for the life
+    of the page. It now starts on H and stops on H (idle: 0 draws, 0 rAF). Lane
+    `lanes/L14-quiet-page.md`.
+
+19. [DONE 2026-10-21] L17 — the first open: where the 9.9 s goes, and what can be cut.
+    The solver is 6.3 s of it; `improvedLayout` is not the cost (x0.99); 60 iterations open
+    in 2.3 s but the layout collapses (edge crossings 77k → 394k, community separation
+    7.2 → 1.9); a community-aware seed does not rescue it; `avoidOverlap: 0` buys 17%.
+    Verdict: the open can only get much faster by moving the layout offline (the `--bake`
+    path), so this lane is a dead end with the evidence written down. Lane
+    `lanes/L17-open-time.md`.
+
+20. [DONE 2026-10-21] L22 — the node disc without the border stroke, the biggest win of
+    the session. Attribution: the resting frame is 86 ms, 63 ms of it the node pass, and
+    the border is the cost — vis draws a node as a fill plus a stroke of world width
+    `min(nodeWidth, 1.5/scale)`, which at the fit scale is as wide as the node itself, so
+    1886 hairline strokes per frame cost ~57 ms. The border colour is the fill colour, so
+    the same disc is drawn with **one fill** and a size grown by exactly that width.
+    Interleaved 3 rounds, v10 vs v11: rest 93.5 → 22.6 ms (**x0.24**), hover 85.6 → 21.5 ms
+    (**x0.25**), all six pairs favour it. Picture: cross-build diff at a fixed camera with
+    an identical layout is 3.02% of painted pixels, all of it the AA edge of a 1 px dot;
+    the white selection ring is intact (446 white px after a real click, v10: 446); arrows,
+    edge selection and the legend toggle unchanged. The lean lever is now redundant and was
+    removed, so the nodes no longer change size when a drag starts. 34/34 tests, artifact
+    `base-ours-v11.html` (`d1af8c56`), exporter `0db4e8ed`. Lane `lanes/L22-node-disc.md`.
+
 ## Tick status
 2026-10-20 (ticks 1-6, idle — no measurement, no code change): six ticks with no direction on
 `--bake`. Item (a) in the brief is stale — the UX block has shipped as `_UX_JS` since
@@ -202,6 +229,22 @@ at a crossing — the nodash control, same order both sides, is 1.61%. Documente
 with the `_REST_EDGE_BATCH = false` switch. 31/31 tests, view rebuilt + smoke clean, artifact
 `base-ours-v9.html` (`aae382be`), exporter `bc6f2ee8`. Remaining blocker unchanged: `--bake`
 needs the user's packaging choice. Bench lock free, loop armed.
+
+2026-10-21 (L14 + L17 + L22 — three lanes run and shipped): the user said "work here and
+once everything is done let me know, I will test before and after", so the open lanes were
+worked through rather than idled on. L14: an idle page woke up 432 times in 3 s because the
+frame HUD's rAF loop never stopped — it now runs only while the HUD is on (0 wake-ups).
+L17: the first open is the solver, and nothing reaches the same picture faster — 60
+iterations open in 2.3 s but the graph collapses (crossings 77k → 394k), a community-aware
+seed does not rescue it, `avoidOverlap: 0` buys 17%. L22 is the big one: the node *border*
+is the frame (1886 hairline strokes, ~57 ms of an 86 ms frame) and because the border colour
+is the fill colour the same disc can be drawn with one fill — rest x0.24, hover x0.25, the
+same picture (3.02% of painted pixels differ, all of it the AA edge of a 1 px dot), the white
+selection ring intact, arrows/selection/legend unchanged. The lean lever became redundant
+and was removed, so the nodes no longer change size when a drag starts. 34/34 tests, view
+rebuilt + smoke clean, artifact `base-ours-v11.html` (`d1af8c56`), exporter `0db4e8ed`.
+Still open: the `--bake` packaging choice (the only route to a much faster first open), and
+L5 (graphs past 9142 nodes) which stays parked.
 
 2026-10-20 (idle tick, awaiting user — no measurement, no code change):
 The tick brief listed (a) fold the L11 UX block and (b) `--bake` as the remaining decisions, but

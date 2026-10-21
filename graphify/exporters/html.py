@@ -134,11 +134,12 @@ _LEAN_GESTURE_JS = """
 // network.setOptions(): setOptions re-applies the global options but also costs a full
 // synchronous redraw (measured: ~80ms on rsl, ~200ms on a 2290-node aggregate, 670-2000ms
 // on a 9142-node graph), which landed as one hitch at dragStart and another at dragEnd.
-// Mutating the instances costs nothing and the drag's own next frame picks it up. The
-// original border width of every node is remembered because learning-status nodes carry a
-// 3px ring and must get it back, not 1.5px.
-const _BORDER_FULL = 1.5, _BORDER_LEAN = 0;
-let _lean = false, _draggingNow = false, _zoomTimer = null, _border0 = null;
+//
+// The node border is no longer dropped for the length of a gesture: the disc is drawn
+// with one fill at all times (see _nbApply below), so there is nothing to lean and the
+// nodes no longer change size when the pointer goes down.
+const _BORDER_FULL = 1.5;
+let _lean = false, _draggingNow = false, _zoomTimer = null;
 
 // Batched edge pass. vis draws each edge by calling edgeType.drawLine(ctx, values, ...);
 // for the duration of a gesture that call is replaced by one draw of every edge, grouped
@@ -322,36 +323,68 @@ function _setLean(on, redraw) {
   if (on === _lean) return;
   _lean = on;
   _EDGE_BATCH.set(on);
-  let applied = false;
-  try {
-    const nodes = network.body && network.body.nodes;
-    if (nodes) {
-      if (!_border0) _border0 = {};
-      for (const id in nodes) {
-        const n = nodes[id];
-        if (!n || !n.options) continue;
-        if (on) {
-          if (!(id in _border0)) _border0[id] = n.options.borderWidth;
-          n.options.borderWidth = _BORDER_LEAN;
-        } else {
-          const w = _border0[id];
-          n.options.borderWidth = (w === undefined) ? _BORDER_FULL : w;
-        }
-        applied = true;
-      }
-    }
-  } catch (e) { applied = false; }
-  if (!applied) {
-    // Fallback for a vis build without network.body.nodes: global option, plus a
-    // redraw on restore the way that path always needed.
-    try { network.setOptions({ nodes: { borderWidth: on ? _BORDER_LEAN : _BORDER_FULL } }); } catch (e) {}
-    return;
-  }
+  // The node discs are drawn with a single fill in every state (see _nbApply), so there
+  // is no border left to drop and no node size to change when a gesture starts.
   // A drag/zoom redraws itself, so leaning needs no redraw; restoring does, because vis
   // does not redraw when the pointer is released (measured: zero canvas strokes in the
   // 20 frames after pointerup unless something forces one).
   if (redraw) { try { network.redraw(); } catch (e) {} }
 }
+
+// ---- the node disc without the border stroke (#perf L22) ----------------
+//
+// vis draws a node as a fill of radius size/2 plus a border stroke whose WORLD width is
+// min(nodeWidth, 1.5/scale) - at the fit scale that stroke is as wide as the node itself,
+// so the node you see is a disc twice its fill radius. On rsl that is 1886 hairline
+// strokes per frame, and they are the single biggest cost of a resting frame: the frame
+// measures 86 ms with the borders and 29 ms without them (same picture, one fill).
+//
+// The border colour is the fill colour, so the same disc can be drawn with one fill: the
+// size is grown by exactly the width the border would have added, which keeps the disc
+// the same size at every zoom level. Hovered and selected nodes keep a real border,
+// because theirs is white and therefore visible.
+let _nbBase = null, _nbHover = {}, _nbSel = {}, _nbScale = -1;
+function _nbPlainSize(base, scale) {
+  return base + Math.min(base, _BORDER_FULL / (scale || 1));
+}
+function _nbApplyNode(id, scale) {
+  const n = network.body && network.body.nodes[id];
+  if (!n || !n.options) return;
+  let base = _nbBase[id];
+  if (base === undefined) _nbBase[id] = base = n.options.size;
+  if (_nbHover[id] || _nbSel[id]) {
+    n.options.size = base;
+    n.options.borderWidth = _BORDER_FULL;
+  } else {
+    n.options.size = _nbPlainSize(base, scale);
+    n.options.borderWidth = 0;
+  }
+}
+function _nbApply(force) {
+  const nodes = network.body && network.body.nodes;
+  if (!nodes) return;
+  if (!_nbBase) {
+    _nbBase = {};
+    for (const id in nodes) _nbBase[id] = nodes[id].options.size;
+  }
+  let scale = 1;
+  try { scale = network.body.view.scale || 1; } catch (e) {}
+  if (!force && scale === _nbScale) return;
+  _nbScale = scale;
+  for (const id in nodes) _nbApplyNode(id, scale);
+}
+network.on('hoverNode', function (p) { _nbHover[p.node] = 1; _nbApplyNode(p.node, _nbScale < 0 ? 1 : _nbScale); });
+network.on('blurNode', function (p) { delete _nbHover[p.node]; _nbApplyNode(p.node, _nbScale < 0 ? 1 : _nbScale); });
+network.on('selectNode', function (p) { p.nodes.forEach(function (id) { _nbSel[id] = 1; _nbApplyNode(id, _nbScale < 0 ? 1 : _nbScale); }); });
+network.on('deselectNode', function (p) { p.nodes.forEach(function (id) { delete _nbSel[id]; _nbApplyNode(id, _nbScale < 0 ? 1 : _nbScale); }); });
+// The size follows the zoom (the border it replaces was a screen-constant width), so it
+// is refreshed when the scale changes. Not while the solver is running: the layout must
+// see the sizes the exporter shipped, or the picture would differ from the unbaked one.
+network.on('beforeDrawing', function () {
+  try { if (network.physics && network.physics.options.enabled) return; } catch (e) {}
+  _nbApply(false);
+});
+network.on('stabilizationIterationsDone', function () { _nbApply(true); });
 // One batched edge pass per frame: afterDrawing fires once per vis draw.
 network.on('afterDrawing', function () { _EDGE_BATCH.frame(); });
 // L12 (#perf): the batched pass is cheaper than one stroke per edge, so on dense graphs
@@ -673,18 +706,28 @@ _UX_JS = """
     'display:none;pointer-events:none';
   document.body.appendChild(hud);
   var hudOn = false, frames = 0, t0 = performance.now(), fps = 0;
-  var lastT = t0, ft = 0;
-  (function loop(t) {
+  var lastT = t0, ft = 0, loopId = 0;
+  // The HUD loop used to run for the life of the page whether or not the HUD was on,
+  // which kept a 144 Hz rAF wake-up alive on an idle page (measured: 0 draws but 432
+  // rAF callbacks in 3 s of silence). It now starts on H and stops on H.
+  function loop(t) {
     ft = t - lastT; lastT = t; frames++;
     if (t - t0 >= 500) { fps = Math.round(frames * 1000 / (t - t0)); frames = 0; t0 = t; }
-    if (hudOn) hud.textContent = fps + ' fps   ' + ft.toFixed(1) + ' ms';
-    requestAnimationFrame(loop);
-  })(t0);
+    if (!hudOn) { loopId = 0; return; }
+    hud.textContent = fps + ' fps   ' + ft.toFixed(1) + ' ms';
+    loopId = requestAnimationFrame(loop);
+  }
   document.addEventListener('keydown', function (e) {
     var tag = (document.activeElement && document.activeElement.tagName) || '';
     if ((e.key === 'h' || e.key === 'H') && tag !== 'INPUT' && tag !== 'TEXTAREA') {
       hudOn = !hudOn;
       hud.style.display = hudOn ? 'block' : 'none';
+      if (hudOn) {
+        lastT = t0 = performance.now(); frames = 0;
+        if (!loopId) loopId = requestAnimationFrame(loop);
+      } else if (loopId) {
+        cancelAnimationFrame(loopId); loopId = 0;
+      }
     }
   });
 })();

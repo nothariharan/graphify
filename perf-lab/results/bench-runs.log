@@ -59,3 +59,56 @@
 2026-10-20 17:37:05+0530	100.9s	exit=0	L12: zoom/hover/lean all together on v9	node harness/probe_zoom_health.mjs --file variants/base-ours-v9.html
 2026-10-20 17:37:36+0530	25.7s	exit=0	L12: zoom/hover/lean together on v9 (full report)	node harness/probe_zoom_health.mjs --file variants/base-ours-v9.html
 2026-10-20 17:38:21+0530	15.3s	exit=0	L12: smoke the shipped view after.html (v9)	node harness/smoke_view.mjs --file view/after.html
+2026-10-21 16:46:37+0530	17.6s	exit=0	L14: does the settled page draw when nothing happens?	node harness/probe_idle.mjs --file view/after.html --idle-ms 3000
+2026-10-21 16:49:03+0530	23.5s	exit=0	L14: idle rAF after making the HUD loop lazy	node harness/probe_idle.mjs --file variants/base-ours-v10.html --idle-ms 3000
+2026-10-21 16:53:21+0530	13.8s	exit=0	L15: how many same-colour runs are in vis's draw order?	node harness/probe_runs.mjs --file variants/base-ours-v10.html
+2026-10-21 16:54:30+0530	19.6s	exit=0	L16: trustworthy at-rest parity for the colour-group batch (settled, control included)	node harness/probe_rest_pixels.mjs --file variants/base-ours-v10.html
+2026-10-21 16:55:15+0530	18.8s	exit=0	L16: at-rest parity for run batching (vis order preserved)	node harness/probe_rest_pixels.mjs --file variants/L16-run-batch.html
+2026-10-21 16:58:22+0530	78.0s	exit=0	L17: first-open A/B, solver iterations and improvedLayout	node harness/ab_load.mjs --variants v10=variants/base-ours-v10.html,nil=variants/L17-nil.html,it60nil=variants/L17-it60nil.html,it30nil=variants/L17-it30nil.html --rounds 3 --out results/ab-load-L17.csv
+2026-10-21 16:58:49+0530	18.5s	exit=0	L17: layout quality vs solver iterations	node harness/probe_layout.mjs --file variants/base-ours-v10.html --shot shots/L17-ref-v10.png
+2026-10-21 16:58:55+0530	5.6s	exit=0	L17: layout quality, 60 iterations	node harness/probe_layout.mjs --file variants/L17-it60nil.html --shot shots/L17-it60.png
+2026-10-21 16:59:00+0530	4.9s	exit=0	L17: layout quality, 30 iterations	node harness/probe_layout.mjs --file variants/L17-it30nil.html --shot shots/L17-it30.png
+2026-10-21 16:59:49+0530	23.0s	exit=0	L18: layout quality with a community-aware seed	node harness/probe_layout.mjs --file variants/L18-seed200.html --shot shots/L18-seed200.png
+2026-10-21 17:00:01+0530	7.0s	exit=0	L18: layout quality, community seed + 60 iterations	node harness/probe_layout.mjs --file variants/L18-seed60.html --shot shots/L18-seed60.png
+2026-10-21 17:00:05+0530	4.7s	exit=0	L18: layout quality, community seed + 40 iterations	node harness/probe_layout.mjs --file variants/L18-seed40.html --shot shots/L18-seed40.png
+2026-10-21 17:02:38+0530	93.5s	exit=0	L19: is the solver time the overlap pass? open A/B	node harness/ab_load.mjs --variants v10=variants/base-ours-v10.html,av0=variants/L19-av0.html,av03=variants/L19-av03.html --rounds 3 --out results/ab-load-L19.csv
+2026-10-21 17:03:42+0530	14.5s	exit=0	L20: where does the resting frame go (nodes vs edges)?	node harness/probe_frame_parts.mjs --file variants/base-ours-v10.html --frames 14
+2026-10-21 17:04:32+0530	14.1s	exit=0	L20: raster floor for the node pass vs what vis spends	node harness/probe_node_cost.mjs --file variants/base-ours-v10.html
+2026-10-21 17:05:17+0530	17.3s	exit=0	L20: CPU profile of the resting frame	node harness/probe_profile_frame.mjs --file variants/base-ours-v10.html --frames 10
+2026-10-21 17:05:52+0530	12.5s	exit=0	L20: true raster cost of the node pass, batched vs per node	node harness/probe_node_raster.mjs --file variants/base-ours-v10.html
+2026-10-21 17:06:34+0530	14.1s	exit=0	L20: visible canvas vs offscreen for the node pass	node harness/probe_node_canvas.mjs --file variants/base-ours-v10.html
+2026-10-21 17:07:13+0530	14.3s	exit=0	L20: time inside vis's node draw vs outside	node harness/probe_node_time.mjs --file variants/base-ours-v10.html
+2026-10-21 17:08:14+0530	19.3s	exit=0	L20: is the node border the raster cost? (frame split on the border variants)	node harness/probe_frame_parts.mjs --file variants/L20-noborder.html --frames 14
+2026-10-21 17:11:16+0530	102.4s	exit=0	L21: same picture? border swap vs shipped (cross-build pixel diff)	node harness/probe_frame_cmp.mjs --a variants/base-ours-v10.html --b variants/L21-noborder.html
+2026-10-21 17:12:40+0530	59.2s	exit=0	L21: same picture at the same camera? border swap vs shipped	node harness/probe_frame_cmp.mjs --a variants/base-ours-v10.html --b variants/L21-noborder.html
+2026-10-21 17:14:23+0530	87.9s	exit=0	L21: static builds, same layout - is the border swap the same picture?	node harness/probe_frame_cmp.mjs --a variants/S-v10.html --b variants/S-l21.html
+2026-10-21 17:14:47+0530	3.6s	exit=0	L21: picture of the border-swap build	node harness/shot_page.mjs --file variants/S-l21.html --out shots/S-l21.png
+2026-10-21 17:14:51+0530	3.7s	exit=0	L21: picture of the shipped build	node harness/shot_page.mjs --file variants/S-v10.html --out shots/S-v10.png
+2026-10-21 17:17:40+0530	140.8s	exit=0	L21: interleaved rest+hover A/B, shipped vs border-swap	node harness/ab_rest.mjs --variants v10=variants/base-ours-v10.html,l21=variants/L21-noborder.html --rounds 3 --frames 40 --out results/ab-rest-L21.csv
+2026-10-21 17:18:10+0530	14.3s	exit=0	L21: hover/selection ring on the border-swap build	node harness/probe_node_ring.mjs --file variants/L21-noborder.html
+2026-10-21 17:18:26+0530	16.1s	exit=0	L21: same probe on the shipped build, as the reference	node harness/probe_node_ring.mjs --file variants/base-ours-v10.html
+2026-10-21 17:19:19+0530	17.5s	exit=0	L21: white ring at zoom 2, border-swap build	node harness/probe_node_ring.mjs --file variants/L21-noborder.html --shot shots/L21-ring.png
+2026-10-21 17:19:41+0530	22.0s	exit=0	L21: white ring at zoom 2, shipped build	node harness/probe_node_ring.mjs --file variants/base-ours-v10.html
+2026-10-21 17:20:13+0530	12.7s	exit=0	L21: what does the node draw with on hover?	node harness/_dbg_ring.mjs variants/L21-noborder.html
+2026-10-21 17:20:49+0530	17.5s	exit=0	L21: white ring at zoom 2, border-swap build	node harness/probe_node_ring.mjs --file variants/L21-noborder.html
+2026-10-21 17:21:06+0530	16.5s	exit=0	L21: white ring at zoom 2, shipped build	node harness/probe_node_ring.mjs --file variants/base-ours-v10.html
+2026-10-21 17:22:31+0530	18.9s	exit=0	L21: white selection ring via the public API, border-swap build	node harness/probe_node_ring.mjs --file variants/L21-noborder.html --shot shots/L21-sel.png
+2026-10-21 17:22:46+0530	15.6s	exit=0	L21: white selection ring via the public API, shipped build	node harness/probe_node_ring.mjs --file variants/base-ours-v10.html
+2026-10-21 17:23:18+0530	12.4s	exit=0	L21: is the ring state set on selection?	node harness/_dbg_ring.mjs variants/L21-noborder.html
+2026-10-21 17:24:21+0530	13.6s	exit=1	L21: pixel line through the selected node	node harness/_dbg_pixels.mjs --a variants/base-ours-v10.html --b variants/L21-noborder.html
+2026-10-21 17:24:58+0530	25.6s	exit=0	L21: pixel line through the selected node	node harness/_dbg_pixels.mjs --a variants/base-ours-v10.html --b variants/L21-noborder.html
+2026-10-21 17:25:39+0530	17.8s	exit=0	L21: real click -> selection ring, border-swap build	node harness/probe_node_ring.mjs --file variants/L21-noborder.html
+2026-10-21 17:25:55+0530	15.6s	exit=0	L21: real click -> selection ring, shipped build	node harness/probe_node_ring.mjs --file variants/base-ours-v10.html
+2026-10-21 17:26:51+0530	17.4s	exit=0	L22: same visible disc, no border stroke - frame cost	node harness/probe_frame_parts.mjs --file variants/L22-same-disc.html --frames 14
+2026-10-21 17:28:45+0530	86.4s	exit=0	L22: same picture? static builds, same layout	node harness/probe_frame_cmp.mjs --a variants/S-v10.html --b variants/S-l22.html
+2026-10-21 17:29:15+0530	18.2s	exit=0	L22: real click -> selection ring	node harness/probe_node_ring.mjs --file variants/L22-same-disc.html --shot shots/L22-sel.png
+2026-10-21 17:32:29+0530	193.0s	exit=0	L22: interleaved rest+hover A/B	node harness/ab_rest.mjs --variants v10=variants/base-ours-v10.html,l22=variants/L22-same-disc.html --rounds 3 --frames 40 --out results/ab-rest-L22.csv
+2026-10-21 17:37:09+0530	115.9s	exit=0	L22: is the resting picture the same? v10 vs v11 at the same camera	node harness/probe_frame_cmp.mjs --a variants/base-ours-v10.html --b variants/base-ours-v11.html
+2026-10-21 17:37:32+0530	14.0s	exit=0	L22: resting picture of v11	node harness/shot_page.mjs --file variants/base-ours-v11.html --out shots/L22-v11-rest.png
+2026-10-21 17:42:06+0530	262.3s	exit=0	L22: interleaved rest+hover A/B, v10 vs v11 (the shipped build)	node harness/ab_rest.mjs --variants v10=variants/base-ours-v10.html,v11=variants/base-ours-v11.html --rounds 3 --frames 40 --out results/ab-rest-L22-shipped.csv
+2026-10-21 17:42:39+0530	24.9s	exit=0	L22: capability probe on the shipped v11	node harness/probe_capabilities.mjs --file variants/base-ours-v11.html --shot shots/L22-v11-arrow.png
+2026-10-21 17:42:58+0530	18.9s	exit=0	L22: white selection ring on v11 (real click)	node harness/probe_node_ring.mjs --file variants/base-ours-v11.html
+2026-10-21 17:43:29+0530	23.1s	exit=0	L22: zoom/hover/lean all together on v11	node harness/probe_zoom_health.mjs --file variants/base-ours-v11.html
+2026-10-21 17:43:52+0530	23.3s	exit=0	L22: at-rest edge parity on v11	node harness/probe_rest_pixels.mjs --file variants/base-ours-v11.html
+2026-10-21 17:44:22+0530	16.9s	exit=0	L22: smoke the shipped view (v11)	node harness/smoke_view.mjs --file view/after.html
+2026-10-21 17:47:31+0530	17.6s	exit=0	L22: does the node size follow the zoom?	node harness/_dbg_zoomsize.mjs variants/base-ours-v11.html

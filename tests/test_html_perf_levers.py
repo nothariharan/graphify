@@ -112,11 +112,42 @@ def test_offline_vis_fallback_present(tmp_path):
     assert "onerror=" in html
 
 
-# --- lean gesture draw (#perf) ------------------------------------------------
-# Node border strokes are the single biggest cost of a drag/zoom frame on a large
-# graph (~1900 ctx.stroke() per frame on rsl). The border is dropped for the
-# duration of the gesture and restored on release, so the graph must never be left
-# permanently borderless.
+# --- the node disc without the border stroke (#perf L22) ---------------------
+# vis draws a node as a fill plus a border stroke whose world width is
+# min(nodeWidth, 1.5/scale); on rsl those 1886 hairline strokes are the single biggest
+# cost of a resting frame (86 ms with them, 29 ms without). The border colour is the
+# fill colour, so the same disc is drawn with one fill and a size grown by exactly the
+# width the border would have added. Hovered and selected nodes keep a real border,
+# because theirs is white.
+
+def test_node_disc_is_drawn_without_the_border_stroke(tmp_path):
+    html, _ = _render(tmp_path, 900, 3)
+    assert "function _nbPlainSize(base, scale)" in html
+    assert "return base + Math.min(base, _BORDER_FULL / (scale || 1));" in html
+    assert "n.options.borderWidth = 0;" in html
+    assert "n.options.size = _nbPlainSize(base, scale);" in html
+
+
+def test_hovered_and_selected_nodes_keep_their_white_border(tmp_path):
+    """The border of a hovered or selected node is white and therefore visible: it must
+    not be dropped with the rest."""
+    html, _ = _render(tmp_path, 900, 3)
+    assert "if (_nbHover[id] || _nbSel[id]) {" in html
+    assert "n.options.size = base;" in html
+    assert "n.options.borderWidth = _BORDER_FULL;" in html
+    for ev in ("hoverNode", "blurNode", "selectNode", "deselectNode"):
+        assert "network.on('%s'" % ev in html
+
+
+def test_node_disc_follows_the_zoom_but_not_the_solver(tmp_path):
+    """The border it replaces was a screen-constant width, so the size follows the scale.
+    The solver must still see the sizes the exporter shipped, or the layout would differ
+    from the unbaked picture."""
+    html, _ = _render(tmp_path, 900, 3)
+    assert "network.on('beforeDrawing', function () {" in html
+    assert "if (network.physics && network.physics.options.enabled) return;" in html
+    assert "network.on('stabilizationIterationsDone', function () { _nbApply(true); });" in html
+
 
 def test_dense_graph_leans_the_draw_during_gestures(tmp_path):
     html, _ = _render(tmp_path, 900, 3)
@@ -131,26 +162,14 @@ def test_lean_writes_node_instances_not_global_setoptions(tmp_path):
     """network.setOptions re-applies the global borderWidth but also costs a full
     synchronous redraw (~200ms on a 2290-node aggregate, 670ms+ at 9142 nodes), which
     landed as a hitch at dragStart and dragEnd. The shipped path mutates the node
-    instances instead and keeps setOptions only as a fallback."""
+    instances instead."""
     html, _ = _render(tmp_path, 900, 3)
-    assert "n.options.borderWidth = _BORDER_LEAN;" in html
     # the gesture's own frame picks it up, so leaning forces no redraw ...
     assert "if (redraw) { try { network.redraw(); } catch (e) {} }" in html
     # ... while restoring does, because vis does not redraw on pointer-up.
     assert "_setLean(false, true)" in html
-    # fallback survives for a vis build without network.body.nodes
-    assert "network.setOptions({ nodes: { borderWidth: on ? _BORDER_LEAN : _BORDER_FULL } })" in html
-    # and the public-API call is no longer the only thing that runs
-    assert html.count("network.setOptions({ nodes: { borderWidth") == 1
-
-
-def test_lean_remembers_per_node_border_width(tmp_path):
-    """Learning-status nodes carry a 3px ring, so restore must put back each node's own
-    width rather than a blanket 1.5 - otherwise a gesture would silently thin the ring."""
-    html, _ = _render(tmp_path, 900, 3)
-    assert "if (!(id in _border0)) _border0[id] = n.options.borderWidth;" in html
-    assert "const w = _border0[id];" in html
-    assert "n.options.borderWidth = (w === undefined) ? _BORDER_FULL : w;" in html
+    # the node instances are written directly, never through a global setOptions
+    assert "network.setOptions({ nodes: { borderWidth" not in html
 
 
 def test_lean_restores_borders_after_zooming_stops(tmp_path):
@@ -408,6 +427,20 @@ def test_zoom_is_clamped_around_the_fit(tmp_path):
     assert "MIN_S = Math.max(0.004, fitScale / 6);" in html
     assert "MAX_S = Math.max(0.4, Math.min(2.0, fitScale * 12));" in html
     assert "if (fitScale === null) {" in html
+
+
+def test_hud_loop_only_runs_while_the_hud_is_on(tmp_path):
+    """The HUD's rAF loop used to run for the life of the page even with the HUD hidden:
+    0 draws but 432 rAF wake-ups in 3 s of silence (probe_idle.mjs). A reading page must be
+    quiet, so the loop starts on H and stops on H."""
+    html, _ = _render(tmp_path, 900, 3)
+    block = _ux_block(html)
+    assert "if (!hudOn) { loopId = 0; return; }" in block
+    assert "if (!loopId) loopId = requestAnimationFrame(loop);" in block
+    assert "cancelAnimationFrame(loopId); loopId = 0;" in block
+    # the infinite form is gone
+    assert "  requestAnimationFrame(loop);\n  })(t0);" not in block
+    assert "(function loop(t) {" not in block
 
 
 def test_interaction_block_is_absent_on_small_graphs(tmp_path):

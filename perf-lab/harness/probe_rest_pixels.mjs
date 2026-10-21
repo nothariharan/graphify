@@ -1,8 +1,15 @@
-// At-rest fidelity for the L12 rest batch: with the batch installed, does the resting
-// frame match the frame vis draws edge by edge? Same camera, same nodes, same colours -
-// only the edge draw path differs.
+// At-rest fidelity for the edge batch: with the batch installed, does the resting frame
+// match the frame vis draws edge by edge? Same camera, same nodes, same colours - only the
+// edge draw path differs.
 //
-//   node harness/probe_rest_pixels.mjs --file variants/L12-rest-batch.html
+//   node harness/probe_rest_pixels.mjs --file variants/base-ours-v10.html [--dump 1] [--mono 1]
+//
+// Method notes (these cost a wrong number once already):
+// - the scene must settle first: a fresh page's first two idle frames differ from the
+//   settled frame by ~40k px because of one delayed pass on the 3rd draw,
+// - each side gets a real redraw and ~350 ms to be painted, otherwise the "plain" capture
+//   can still be a batched frame,
+// - the batch->batch round trip is reported as a control: it must be 0.
 import { chromium } from 'playwright-core';
 import http from 'node:http';
 import fs from 'node:fs';
@@ -32,75 +39,92 @@ const browser = await chromium.launch({ executablePath: CHROME, headless: true }
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 await page.goto('http://127.0.0.1:8242/' + FILE.replace(/\\/g, '/'), { waitUntil: 'load', timeout: 180000 });
 await page.waitForFunction(() => { try { return network.physics.options.enabled === false; } catch (e) { return false; } }, null, { timeout: 180000 }).catch(() => {});
-await page.waitForTimeout(900);
+await page.waitForTimeout(1200);
 
 const res = await page.evaluate(async ({ wantDump, mono }) => {
   const cv = document.querySelector('#graph canvas');
   const ctx = cv.getContext('2d');
   const grab = () => Array.from(ctx.getImageData(0, 0, cv.width, cv.height).data);
-  const tick = () => new Promise((r) => requestAnimationFrame(() => r()));
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const diff = (a, b) => {
+    let n = 0, worst = 0, sum = 0;
+    for (let i = 0; i < a.length; i += 4) {
+      const d = Math.max(Math.abs(a[i] - b[i]), Math.abs(a[i + 1] - b[i + 1]), Math.abs(a[i + 2] - b[i + 2]));
+      if (d > 0) sum += d;
+      if (d > worst) worst = d;
+      if (d > 16) n++;
+    }
+    return { n, worst, mean: n ? sum / n : 0 };
+  };
+  const paintedOf = (a) => {
+    let p = 0;
+    for (let i = 0; i < a.length; i += 4) if (a[i] > 24 || a[i + 1] > 24 || a[i + 2] > 24) p++;
+    return p;
+  };
+  const setRest = (on) => {
+    if (typeof _EDGE_BATCH.setRest === 'function') { _EDGE_BATCH.setRest(on); return 'setRest'; }
+    if (typeof _REST_BATCH_ON !== 'undefined') { _REST_BATCH_ON = on; _EDGE_BATCH.set(on); return 'legacy'; }
+    return 'none';
+  };
+  const patched = () => Object.keys(network.body.edges).filter((k) => {
+    const et = network.body.edges[k].edgeType;
+    return et && Object.prototype.hasOwnProperty.call(et, 'drawLine');
+  }).length;
 
-  // Same-colour control: with every edge one colour and solid, the only thing that could
-  // still differ between the two draw paths is geometry, not the order of overlapping
-  // strokes. Ids come from the DataSet itself, because its ids are numbers.
+  // 1. settle: two consecutive redraws must be identical
+  let settled = false, prev = null, settleDiff = -1;
+  for (let i = 0; i < 12 && !settled; i++) {
+    network.redraw();
+    await wait(300);
+    const cur = grab();
+    if (prev) {
+      const d = diff(prev, cur);
+      if (d.n === 0) { settled = true; settleDiff = 0; } else settleDiff = d.n;
+    }
+    prev = cur;
+  }
+
+  // 2. same-colour control: with every edge one colour and solid, only geometry can differ
   if (mono) {
     const items = edgesDS.get().map((x) => ({ id: x.id, color: { color: '#9aa0a6', opacity: 0.7 }, dashes: false }));
     edgesDS.update(items);
-    await new Promise((r) => setTimeout(r, 500));
+    await wait(600);
   }
 
-  network.redraw(); await tick(); await tick();
+  // 3. batched frame
+  setRest(true);
+  network.redraw();
+  await wait(350);
   const batched = grab();
-  const batchCount = (() => { try { return _EDGE_BATCH.count(); } catch (e) { return -1; } })();
-  const batchedEdges = Object.keys(network.body.edges).filter((k) => {
-    const et = network.body.edges[k].edgeType;
-    return et && Object.prototype.hasOwnProperty.call(et, 'drawLine');
-  }).length;
+  const batchedEdges = patched();
 
-  // hand the edges back to vis without moving the camera
-  let off = 'ok';
-  try {
-    if (typeof _EDGE_BATCH.setRest === 'function') _EDGE_BATCH.setRest(false);
-    else { _REST_BATCH_ON = false; _EDGE_BATCH.set(false); }   // scratch variant
-  } catch (e) { off = 'err:' + e.message; }
-  network.redraw(); await tick(); await tick();
+  // 4. vis frame
+  setRest(false);
+  network.redraw();
+  await wait(350);
   const plain = grab();
-  const plainEdges = Object.keys(network.body.edges).filter((k) => {
-    const et = network.body.edges[k].edgeType;
-    return et && Object.prototype.hasOwnProperty.call(et, 'drawLine');
-  }).length;
+  const plainEdges = patched();
 
-  let differing = 0, worst = 0, sum = 0, painted = 0;
-  const BW = 16, BH = 10;
-  const bucket = new Array(BW * BH).fill(0);
-  const W = cv.width, H = cv.height;
-  for (let i = 0; i < batched.length; i += 4) {
-    const a = batched[i] - plain[i], b = batched[i + 1] - plain[i + 1], c = batched[i + 2] - plain[i + 2];
-    const d = Math.max(Math.abs(a), Math.abs(b), Math.abs(c));
-    if (d > 0) sum += d;
-    if (d > worst) worst = d;
-    if (d > 16) {
-      differing++;
-      const px = (i / 4) % W, py = Math.floor((i / 4) / W);
-      bucket[Math.min(BH - 1, Math.floor(py * BH / H)) * BW + Math.min(BW - 1, Math.floor(px * BW / W))]++;
-    }
-    if (plain[i] > 24 || plain[i + 1] > 24 || plain[i + 2] > 24) painted++;
-  }
-  const top = bucket.map((n, k) => ({ n, k })).filter((x) => x.n > 0).sort((x, y) => y.n - x.n).slice(0, 5)
-    .map((x) => ({ cell: `r${Math.floor(x.k / BW)}c${x.k % BW}`, n: x.n }));
+  // 5. back to the batch, as a control: the same draw path must give the same pixels
+  setRest(true);
+  network.redraw();
+  await wait(350);
+  const batched2 = grab();
 
-  // optional visual dump: batched frame, plain frame, and a magenta diff mask
+  const d1 = diff(batched, plain);
+  const control = diff(batched, batched2);
+  const painted = paintedOf(plain);
+
   let dump = null;
   if (wantDump) {
     const mk = (fn) => {
       const c = document.createElement('canvas');
-      c.width = W; c.height = H;
+      c.width = cv.width; c.height = cv.height;
       const x = c.getContext('2d');
-      const img = x.createImageData(W, H);
-      const d = img.data;
-      for (let p = 0, i = 0; p < W * H; p++, i += 4) {
+      const img = x.createImageData(cv.width, cv.height);
+      for (let p = 0, i = 0; p < cv.width * cv.height; p++, i += 4) {
         const v = fn(i);
-        d[i] = v[0]; d[i + 1] = v[1]; d[i + 2] = v[2]; d[i + 3] = 255;
+        img.data[i] = v[0]; img.data[i + 1] = v[1]; img.data[i + 2] = v[2]; img.data[i + 3] = 255;
       }
       x.putImageData(img, 0, 0);
       return c.toDataURL('image/png');
@@ -116,28 +140,27 @@ const res = await page.evaluate(async ({ wantDump, mono }) => {
   }
   return {
     camera: { scale: network.getScale(), position: network.getViewPosition() },
-    pixels: batched.length / 4, painted, differing, worst,
-    meanDiffOfDiffering: differing ? sum / differing : 0,
-    pctOfPainted: painted ? (100 * differing / painted) : 0,
-    top, dump,
-    batchedEdges, plainEdges, off,
-    batchCount,
-    totalEdges: Object.keys(network.body.edges).length,
+    settled, settleDiff,
+    pixels: batched.length / 4, painted,
+    differing: d1.n, worst: d1.worst, mean: d1.mean,
+    pctOfPainted: painted ? (100 * d1.n / painted) : 0,
+    controlDiffering: control.n,
+    batchedEdges, plainEdges, dump,
   };
 }, { wantDump: DUMP, mono: MONO });
 
 if (SHOT) await page.screenshot({ path: SHOT });
 if (res.dump) {
   for (const [k, uri] of Object.entries(res.dump)) {
-    fs.writeFileSync(path.join(LAB, 'shots', `L12-diff-${k}.png`), Buffer.from(uri.split(',')[1], 'base64'));
+    fs.writeFileSync(path.join(LAB, 'shots', `rest-diff-${k}.png`), Buffer.from(uri.split(',')[1], 'base64'));
   }
-  console.log('  wrote shots/L12-diff-{batched,plain,diff}.png');
+  console.log('  wrote shots/rest-diff-{batched,plain,diff}.png');
 }
 
 await browser.close();
 srv.close();
-console.log(`${path.basename(FILE)}  camera scale=${res.camera.scale.toFixed(4)}`);
-console.log(`  patched edges: batched ${res.batchedEdges} -> plain ${res.plainEdges}  (disable: ${res.off})`);
-console.log(`  edges in the batch: ${res.batchCount} of ${res.totalEdges}`);console.log(`  canvas ${res.pixels} px, of which ${res.painted} non-background`);
-console.log(`  pixels differing by >16: ${res.differing}  (${res.pctOfPainted.toFixed(2)}% of painted, worst channel delta ${res.worst}, mean ${res.meanDiffOfDiffering.toFixed(1)})`);
-console.log('  busiest 16x10 cells: ' + res.top.map((t) => `${t.cell}=${t.n}`).join(' '));
+console.log(`${path.basename(FILE)}  camera scale=${res.camera.scale.toFixed(4)}  settled=${res.settled} (last settle diff ${res.settleDiff} px)`);
+console.log(`  patched edges: batched ${res.batchedEdges} -> plain ${res.plainEdges}`);
+console.log(`  canvas ${res.pixels} px, of which ${res.painted} non-background`);
+console.log(`  pixels differing by >16: ${res.differing}  (${res.pctOfPainted.toFixed(2)}% of painted, worst channel delta ${res.worst}, mean ${res.mean.toFixed(1)})`);
+console.log(`  control, batch -> batch: ${res.controlDiffering} px differing (must be 0)`);
