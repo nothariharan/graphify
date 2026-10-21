@@ -231,6 +231,17 @@ physics off), (3) keep capability. Aesthetics levers (straight/discrete) optiona
     x2.26 / x2.26 / x5.42. L23 (dashed edges back in the batch) measured and not adopted:
     parity and gestures both unchanged, so the dashed exclusion costs nothing measurable.
 
+20d. [DONE 2026-10-21] The baseline is the **official** repo, not the fork. The official
+    remote (`origin` = safishamsi/graphify) has its **default branch on `v8` @ 847a93f3**
+    (today's commit), not `main` @ 91f4d120, and the `v1.0.0` tag is from 2026-04-05. The
+    official v8 has `graphify/exporters/html.py` with `hideEdgesOnDrag: true` and none of the
+    perf work, so it still hides the edges while you drag. The view now serves
+    `before.html` = the official v8 build, `before-your-checkout.html` = the user's checkout
+    (3a09ba73), `after.html` = v12. Against the official, 5 interleaved rounds
+    (`results/ab-rsl-official-v12.csv`): node drag 15.4 → 36.0 fps (x2.34, jank 89 → 22),
+    pan 15.4 → 37.5 (x2.44, jank 89 → 23), zoom 6.6 → 35.8 (x5.42, jank 91 → 18); rest
+    179.4 → 26.0 ms (x0.14), hover 171.8 → 27.3 ms (x0.16).
+
 ## Tick status
 2026-10-20 (ticks 1-6, idle — no measurement, no code change): six ticks with no direction on
 `--bake`. Item (a) in the brief is stale — the UX block has shipped as `_UX_JS` since

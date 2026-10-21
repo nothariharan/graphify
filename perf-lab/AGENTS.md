@@ -89,22 +89,27 @@ There is no single "current graphify" to compare against. The ladder, oldest to 
 
 | build | what it is | viewer script |
 |---|---|---|
-| `variants/base-release-main.html` | the **released main** (`origin/main` = `fork/main` = 91f4d120). Its viewer lives in `graphify/export.py`; there is no `graphify/exporters/` package in main at all, and it sets `hideEdgesOnDrag: true` - edges vanish while you drag | 164 lines |
-| `variants/base-rsl-head.html` | the perf branch's **pre-perf** state (built 2026-10-17): the released viewer plus the theme toggle, still with `hideEdgesOnDrag: true` | 340 lines |
+| `variants/base-official-v8.html` | the **official** repo (`safishamsi/graphify`, remote `origin`), default branch `v8` @ 847a93f3 - the commit it is on today. Its viewer is `graphify/exporters/html.py` and it sets `hideEdgesOnDrag: true`, so the edges vanish while you drag | 340 lines |
+| `variants/base-release-main.html` | the official's `main` branch @ 91f4d120, whose viewer still lives in `graphify/export.py` | 164 lines |
 | `variants/base-maincheckout.html` | the **user's own checkout**: `perf/graph-view-lag` @ 3a09ba73 - the lean, the batched edge pass, the position cache, the edge-hiding fix | 616 lines |
 | `variants/base-ours-v12.html` | this session's work | 884 lines |
 
-`view/before.html` is the user's own checkout (their current reality) and
-`view/before-released-main.html` is the released main. The earlier baseline
-(`base-rsl-head.html`) is two milestones behind their checkout, so a before/after against
-it flatters the work - quote the checkout numbers when talking to the user.
+`view/before.html` is the **official** build (what an install of graphify renders today),
+`view/before-your-checkout.html` is the user's checkout, `view/after.html` is v12. The
+official `main` branch is *older* than its own `v8` branch, and the `v1.0.0` tag is from
+2026-04-05, so "the latest official" is `origin/v8` @ 847a93f3.
 
-Against the user's checkout, 5 interleaved rounds (`results/ab-rsl-checkout-v12-5r.csv`):
+Against the official, 5 interleaved rounds (`results/ab-rsl-official-v12.csv`): node drag
+15.4 → 36.0 fps (x2.34, jank 89 → 22), pan 15.4 → 37.5 (x2.44, jank 89 → 23), zoom
+6.6 → 35.8 (x5.42, jank 91 → 18). Rest and hover, 3 rounds
+(`results/ab-rest-official-v12.csv`): rest 179.4 → 26.0 ms (x0.14), hover 171.8 → 27.3 ms
+(x0.16) - the official's numbers are noisy because a full repaint of 5762 strokes costs
+wildly different amounts from moment to moment.
+
+Against the user's own checkout, 5 interleaved rounds (`results/ab-rsl-checkout-v12-5r.csv`):
 node drag 38.3 → 36.9 fps (x0.96, jank 20 → 16), pan 30.8 → 37.2 fps (x1.21, jank 38 → 19),
 and 3 rounds for zoom (`results/ab-rsl-checkout-v12.csv`): 32.0 → 34.2 fps (x1.07, jank
-40 → 29). Against the released main (`results/ab-rsl-v11-certified.csv`): node drag
-14.8 → 33.4 fps (x2.26, jank 89 → 27), pan 15.8 → 35.7 (x2.26, 89 → 23), zoom 6.4 → 34.7
-(x5.42, 90 → 30).
+40 → 29).
 
 L14 certified on this artifact: an idle page draws nothing and wakes up nothing (0 draws,
 0 rAF in 3 s; before the fix 432 rAF wake-ups, because the frame HUD's loop ran for the

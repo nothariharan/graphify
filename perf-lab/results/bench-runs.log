@@ -125,3 +125,6 @@
 2026-10-21 18:54:39+0530	328.2s	exit=0	L22: 5-round paired drag/pan, the user's checkout vs v12	node harness/ab_drag.mjs --variants checkout=variants/base-maincheckout.html,v12=variants/base-ours-v12.html --rounds 5 --gestures node,pan --steps 90 --out results/ab-rsl-checkout-v12-5r.csv
 2026-10-21 18:55:10+0530	13.1s	exit=0	L22: smoke the before page (the user's own checkout)	node harness/smoke_view.mjs --file view/before.html
 2026-10-21 18:55:19+0530	8.5s	exit=0	L22: smoke the released-main page	node harness/smoke_view.mjs --file view/before-released-main.html
+2026-10-21 21:37:42+0530	15.1s	exit=0	official baseline: smoke the official page	node harness/smoke_view.mjs --file view/before.html
+2026-10-21 21:44:24+0530	392.7s	exit=0	official baseline vs v12: the numbers the user will judge (5 rounds, gestures)	node harness/ab_drag.mjs --variants official=variants/base-official-v8.html,v12=variants/base-ours-v12.html --rounds 5 --gestures node,pan,zoom --steps 90 --out results/ab-rsl-official-v12.csv
+2026-10-21 21:47:39+0530	180.4s	exit=0	official baseline vs v12: rest + hover	node harness/ab_rest.mjs --variants official=variants/base-official-v8.html,v12=variants/base-ours-v12.html --rounds 3 --frames 40 --out results/ab-rest-official-v12.csv
