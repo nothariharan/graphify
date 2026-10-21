@@ -27,8 +27,10 @@ def localize(src, dst, label):
           f"arrows_deferred={'arrows: { to: { enabled: false } },' in s}  cache={'_savePositions' in s}")
 
 
-localize(os.path.join(LAB, "variants", "base-rsl-head.html"),
-         os.path.join(VIEW, "before.html"), "CURRENT (main/HEAD)")
+localize(os.path.join(LAB, "variants", "base-maincheckout.html"),
+         os.path.join(VIEW, "before.html"), "BEFORE (your checkout 3a09ba73)")
+localize(os.path.join(LAB, "variants", "base-release-main.html"),
+         os.path.join(VIEW, "before-released-main.html"), "RELEASED main (91f4d120)")
 localize(os.path.join(LAB, "variants", "base-ours-v12.html"),
          os.path.join(VIEW, "after.html"), "OURS (v12: + node disc without border stroke)")
 print("wrote", VIEW)

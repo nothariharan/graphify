@@ -77,13 +77,34 @@ say so in `LOG.md`, and re-measure before quoting any number in this file.
 
 L22 certified on this artifact (`results/ab-rest-L22-v12.csv`, interleaved 3 rounds,
 v10 vs v12): rest p50 84.0 → 27.9 ms (**x0.33**), hover 85.6 → 29.1 ms (**x0.34**), all six
-pairs favour the new build. Gestures against the build it replaces, same session
-(`results/ab-rsl-v8-v12.csv`): node drag 28.2 → 34.9 fps (x1.24, jank 44 → 21), pan
-25.2 → 33.9 fps (x1.35, jank 60 → 27), zoom 30.8 → 30.3 fps (x0.98). The picture is the same:
-cross-build pixel diff at a fixed camera with an identical layout is 3.02% of painted
-pixels, and it is the anti-aliased edge of a 1 px dot (0 pixels painted in v10 that v12 does
-not paint). The white selection ring is intact (446 white pixels after a real mouse click,
-v10: 446). L12's at-rest edge parity is unchanged at 9.83% of painted pixels, colour only.
+pairs favour the new build. The picture is the same: cross-build pixel diff at a fixed
+camera with an identical layout is 3.02% of painted pixels, and it is the anti-aliased edge
+of a 1 px dot (0 pixels painted in v10 that v12 does not paint). The white selection ring is
+intact (446 white pixels after a real mouse click, v10: 446). L12's at-rest edge parity is
+unchanged at 9.83% of painted pixels, colour only.
+
+### Which build is the baseline (this matters more than it looks)
+
+There is no single "current graphify" to compare against. The ladder, oldest to newest:
+
+| build | what it is | viewer script |
+|---|---|---|
+| `variants/base-release-main.html` | the **released main** (`origin/main` = `fork/main` = 91f4d120). Its viewer lives in `graphify/export.py`; there is no `graphify/exporters/` package in main at all, and it sets `hideEdgesOnDrag: true` - edges vanish while you drag | 164 lines |
+| `variants/base-rsl-head.html` | the perf branch's **pre-perf** state (built 2026-10-17): the released viewer plus the theme toggle, still with `hideEdgesOnDrag: true` | 340 lines |
+| `variants/base-maincheckout.html` | the **user's own checkout**: `perf/graph-view-lag` @ 3a09ba73 - the lean, the batched edge pass, the position cache, the edge-hiding fix | 616 lines |
+| `variants/base-ours-v12.html` | this session's work | 884 lines |
+
+`view/before.html` is the user's own checkout (their current reality) and
+`view/before-released-main.html` is the released main. The earlier baseline
+(`base-rsl-head.html`) is two milestones behind their checkout, so a before/after against
+it flatters the work - quote the checkout numbers when talking to the user.
+
+Against the user's checkout, 5 interleaved rounds (`results/ab-rsl-checkout-v12-5r.csv`):
+node drag 38.3 → 36.9 fps (x0.96, jank 20 → 16), pan 30.8 → 37.2 fps (x1.21, jank 38 → 19),
+and 3 rounds for zoom (`results/ab-rsl-checkout-v12.csv`): 32.0 → 34.2 fps (x1.07, jank
+40 → 29). Against the released main (`results/ab-rsl-v11-certified.csv`): node drag
+14.8 → 33.4 fps (x2.26, jank 89 → 27), pan 15.8 → 35.7 (x2.26, 89 → 23), zoom 6.4 → 34.7
+(x5.42, 90 → 30).
 
 L14 certified on this artifact: an idle page draws nothing and wakes up nothing (0 draws,
 0 rAF in 3 s; before the fix 432 rAF wake-ups, because the frame HUD's loop ran for the

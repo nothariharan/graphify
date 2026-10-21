@@ -119,3 +119,9 @@
 2026-10-21 18:06:37+0530	25.5s	exit=0	L22: capability probe on v12	node harness/probe_capabilities.mjs --file variants/base-ours-v12.html
 2026-10-21 18:06:56+0530	19.1s	exit=0	L22: white selection ring on v12 (real click)	node harness/probe_node_ring.mjs --file variants/base-ours-v12.html
 2026-10-21 18:07:31+0530	15.1s	exit=0	L22: smoke the shipped view (v12)	node harness/smoke_view.mjs --file view/after.html
+2026-10-21 18:43:13+0530	225.9s	exit=0	L22: the fair before/after - the user's own checkout (3a09ba73) vs v12	node harness/ab_drag.mjs --variants checkout=variants/base-maincheckout.html,v12=variants/base-ours-v12.html --rounds 3 --gestures node,pan,zoom --steps 90 --out results/ab-rsl-checkout-v12.csv
+2026-10-21 18:45:04+0530	20.7s	exit=0	L23: at-rest parity with the dashed edges back in the batch	node harness/probe_rest_pixels.mjs --file variants/base-L23-dashbatch.html
+2026-10-21 18:48:55+0530	230.5s	exit=0	L23: v12 vs the dash-batched build, gestures	node harness/ab_drag.mjs --variants v12=variants/base-ours-v12.html,l23=variants/base-L23-dashbatch.html --rounds 3 --gestures node,pan,zoom --steps 90 --out results/ab-rsl-v12-l23.csv
+2026-10-21 18:54:39+0530	328.2s	exit=0	L22: 5-round paired drag/pan, the user's checkout vs v12	node harness/ab_drag.mjs --variants checkout=variants/base-maincheckout.html,v12=variants/base-ours-v12.html --rounds 5 --gestures node,pan --steps 90 --out results/ab-rsl-checkout-v12-5r.csv
+2026-10-21 18:55:10+0530	13.1s	exit=0	L22: smoke the before page (the user's own checkout)	node harness/smoke_view.mjs --file view/before.html
+2026-10-21 18:55:19+0530	8.5s	exit=0	L22: smoke the released-main page	node harness/smoke_view.mjs --file view/before-released-main.html

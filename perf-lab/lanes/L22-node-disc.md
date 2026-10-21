@@ -106,3 +106,34 @@ scale 2 it is 11.95 (11.2 + 0.75) - exactly the disc vis draws at every level.
 Ship it. The resting frame and every interaction that repaints it (hover, selection, a
 legend toggle) are about **3x faster** on the same picture, and the gestures are 1.2-1.35x
 faster than the build they replace.
+
+## Against the right baseline
+
+The lab's first baseline was the perf branch's pre-perf snapshot, which turned out to be two
+milestones behind the user's own checkout (see the baseline ladder in `AGENTS.md`). The
+honest comparison, 5 interleaved rounds, `results/ab-rsl-checkout-v12-5r.csv`:
+
+| gesture | the user's checkout (3a09ba73) | v12 | ratio | jank >33 ms |
+|---|---|---|---|---|
+| node drag | 38.3 fps | 36.9 fps | x0.96 | 20 → 16 |
+| pan | 30.8 fps | 37.2 fps | **x1.21** | 38 → 19 |
+| zoom (3 rounds) | 32.0 fps | 34.2 fps | x1.07 | 40 → 29 |
+
+So against what the user actually has today: the drag is level, the pan is 21% faster with
+half the jank, the zoom 7% faster, and the resting frame and the hover redraw are 3x
+faster. Against the *released* main (which still hides the edges while you drag) it is
+x2.26 / x2.26 / x5.42.
+
+## L23: the dashed edges (measured, not adopted)
+
+L12 hands the 393 dashed (INFERRED confidence) edges back to vis so their dash rendering is
+vis's own, which costs 393 extra strokes per frame. Putting them back into the batch
+(`harness/mk_l23.py`, scratch build `variants/base-L23-dashbatch.html`) changes nothing
+measurable:
+
+- at-rest parity 9.81% vs 9.83% - the exclusion was never buying fidelity,
+- gestures: node x1.01, pan x0.98, zoom x0.90 (`results/ab-rsl-v12-l23.csv`) - noise.
+
+So the exclusion stays (fewer moving parts, the confidence texture is exactly vis's) and
+the 393 strokes are not what the drag gap was about. The drag gap against the checkout was
+host noise: the 3-round run said x0.85, the 5-round run says x0.96.

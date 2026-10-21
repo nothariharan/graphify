@@ -217,6 +217,20 @@ physics off), (3) keep capability. Aesthetics levers (straight/discrete) optiona
     Artifact `base-ours-v12.html` (`e720f6cb`), exporter `56c7de44`, 35/35 tests, view
     rebuilt + smoke clean.
 
+20c. [DONE 2026-10-21] Baseline audit. The "before" page the user was about to test was the
+    perf branch's pre-perf snapshot, which is **two milestones behind their own checkout** -
+    the lab was flattering the work. The truth: the released main (`origin/main` =
+    `fork/main` = 91f4d120) renders the viewer from `graphify/export.py` (164 script lines,
+    `hideEdgesOnDrag: true`, no `graphify/exporters/` package in main at all), and the
+    user's checkout is on `perf/graph-view-lag` @ 3a09ba73 (616 lines: lean + edge batch +
+    position cache + the edge-hiding fix). The view now serves three pages - `before.html`
+    (the checkout), `before-released-main.html` (the released main), `after.html` (v12) - and
+    the numbers to quote are the ones against the checkout: node drag 38.3 → 36.9 fps (x0.96,
+    jank 20 → 16), pan 30.8 → 37.2 (x1.21, jank 38 → 19), zoom 32.0 → 34.2 (x1.07, jank
+    40 → 29), rest frame 84.0 → 27.9 ms, hover 85.6 → 29.1 ms. Against the released main:
+    x2.26 / x2.26 / x5.42. L23 (dashed edges back in the batch) measured and not adopted:
+    parity and gestures both unchanged, so the dashed exclusion costs nothing measurable.
+
 ## Tick status
 2026-10-20 (ticks 1-6, idle — no measurement, no code change): six ticks with no direction on
 `--bake`. Item (a) in the brief is stale — the UX block has shipped as `_UX_JS` since
