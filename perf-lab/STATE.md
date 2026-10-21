@@ -242,6 +242,23 @@ physics off), (3) keep capability. Aesthetics levers (straight/discrete) optiona
     pan 15.4 → 37.5 (x2.44, jank 89 → 23), zoom 6.6 → 35.8 (x5.42, jank 91 → 18); rest
     179.4 → 26.0 ms (x0.14), hover 171.8 → 27.3 ms (x0.16).
 
+20e. [DONE 2026-10-21] L24 — **click to focus**, the feature the user asked for by name
+    (with a screenshot of the hover focus as the picture they want). Clicking a node keeps
+    the node and its 1-hop neighbours at full colour and dims the other 1848, and it stays
+    that way until you click empty space, click the same node again, or press Escape. The
+    hover focus is suppressed while a click focus is active, so moving the pointer cannot
+    wipe it. The mechanism is the hover focus's (a colour blend on the node instances,
+    never `opacity`, never a DataSet update), so it costs nothing at rest: the A/A control
+    (the same build against itself) shows the harness's own position bias is x1.58 on the
+    resting frame, larger than any difference this could produce. Probe on v13: 38 bright /
+    1848 dimmed after the click, 1886 / 0 after every dismiss path, the white selection
+    ring intact. The user's "4-7 seconds less loading" is the **localStorage layout
+    cache** (`probe_reopen.mjs`): ours 4 538 ms first open → **363 ms** re-open, the
+    official build 4 848 → 4 416 ms because it runs the solver on every open. The first
+    open in a fresh browser still pays the solver - that is `--bake`. Artifact
+    `base-ours-v13.html` (`b0834030`), exporter `38a68cbc`, 36/36 tests. Lane
+    `lanes/L24-click-focus.md`.
+
 ## Tick status
 2026-10-20 (ticks 1-6, idle — no measurement, no code change): six ticks with no direction on
 `--bake`. Item (a) in the brief is stale — the UX block has shipped as `_UX_JS` since

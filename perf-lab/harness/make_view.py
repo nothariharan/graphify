@@ -31,6 +31,6 @@ localize(os.path.join(LAB, "variants", "base-official-v8.html"),
          os.path.join(VIEW, "before.html"), "OFFICIAL graphify (safishamsi/graphify v8 @ 847a93f3)")
 localize(os.path.join(LAB, "variants", "base-maincheckout.html"),
          os.path.join(VIEW, "before-your-checkout.html"), "your checkout (3a09ba73)")
-localize(os.path.join(LAB, "variants", "base-ours-v12.html"),
-         os.path.join(VIEW, "after.html"), "OURS (v12: + node disc without border stroke)")
+localize(os.path.join(LAB, "variants", "base-ours-v13.html"),
+         os.path.join(VIEW, "after.html"), "OURS (v13: + click to focus)")
 print("wrote", VIEW)

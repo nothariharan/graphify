@@ -128,3 +128,19 @@
 2026-10-21 21:37:42+0530	15.1s	exit=0	official baseline: smoke the official page	node harness/smoke_view.mjs --file view/before.html
 2026-10-21 21:44:24+0530	392.7s	exit=0	official baseline vs v12: the numbers the user will judge (5 rounds, gestures)	node harness/ab_drag.mjs --variants official=variants/base-official-v8.html,v12=variants/base-ours-v12.html --rounds 5 --gestures node,pan,zoom --steps 90 --out results/ab-rsl-official-v12.csv
 2026-10-21 21:47:39+0530	180.4s	exit=0	official baseline vs v12: rest + hover	node harness/ab_rest.mjs --variants official=variants/base-official-v8.html,v12=variants/base-ours-v12.html --rounds 3 --frames 40 --out results/ab-rest-official-v12.csv
+2026-10-21 22:04:18+0530	197.7s	exit=1	L24: does the click focus dim the unconnected nodes and restore cleanly?	node harness/probe_click_focus.mjs --file variants/base-ours-v13.html --shot shots/L24-click-focus.png
+2026-10-21 22:05:04+0530	19.0s	exit=0	L24: does the click focus dim the unconnected nodes and restore cleanly?	node harness/probe_click_focus.mjs --file variants/base-ours-v13.html --shot shots/L24-click-focus.png
+2026-10-21 22:06:01+0530	20.3s	exit=0	L24: click focus with a settled base frame	node harness/probe_click_focus.mjs --file variants/base-ours-v13.html --shot shots/L24-click-focus.png
+2026-10-21 22:06:52+0530	19.8s	exit=0	L24: click focus, restore measured against a settled reference	node harness/probe_click_focus.mjs --file variants/base-ours-v13.html --shot shots/L24-click-focus.png
+2026-10-21 22:07:41+0530	17.2s	exit=0	L24: is the camera moving? (the pixel diff needs an explanation)	node harness/probe_click_focus.mjs --file variants/base-ours-v13.html
+2026-10-21 22:08:36+0530	22.8s	exit=0	L24: camera position across the click sequence	node harness/probe_click_focus.mjs --file variants/base-ours-v13.html
+2026-10-21 22:10:17+0530	22.9s	exit=0	L24: click focus with the hover hand-back	node harness/probe_click_focus.mjs --file variants/base-ours-v13.html --shot shots/L24-click-focus.png
+2026-10-21 22:11:35+0530	21.9s	exit=0	L24: click focus, dismiss restores everything	node harness/probe_click_focus.mjs --file variants/base-ours-v13.html --shot shots/L24-click-focus.png
+2026-10-21 22:13:38+0530	113.7s	exit=0	L24: the click focus must not cost the resting frame (v12 vs v13)	node harness/ab_rest.mjs --variants v12=variants/base-ours-v12.html,v13=variants/base-ours-v13.html --rounds 3 --frames 40 --out results/ab-rest-L24.csv
+2026-10-21 22:13:54+0530	15.2s	exit=0	L24: capability probe on v13	node harness/probe_capabilities.mjs --file variants/base-ours-v13.html
+2026-10-21 22:17:52+0530	206.1s	exit=0	L24: 5 rounds, the click focus must not cost the resting frame	node harness/ab_rest.mjs --variants v12=variants/base-ours-v12.html,v13=variants/base-ours-v13.html --rounds 5 --frames 40 --out results/ab-rest-L24-5r.csv
+2026-10-21 22:22:44+0530	170.2s	exit=0	L24: A/A control - the same build twice, to see the harness position bias	node harness/ab_rest.mjs --variants a=variants/base-ours-v12.html,b=variants/base-ours-v12.html --rounds 5 --frames 40 --out results/ab-rest-AA-control.csv
+2026-10-21 22:23:16+0530	6.4s	exit=0	L24: why is our open faster - the layout cache across re-opens	node harness/probe_reopen.mjs --file variants/base-ours-v13.html --runs 3
+2026-10-21 22:23:31+0530	15.1s	exit=0	L24: the same probe on the official build	node harness/probe_reopen.mjs --file variants/base-official-v8.html --runs 3
+2026-10-21 22:24:59+0530	5.7s	exit=0	L24: smoke the shipped view (v13)	node harness/smoke_view.mjs --file view/after.html
+2026-10-21 22:25:24+0530	5.4s	exit=0	L24: smoke the shipped view (v13)	node harness/smoke_view.mjs --file view/after.html

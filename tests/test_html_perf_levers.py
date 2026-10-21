@@ -422,14 +422,32 @@ def _ux_block(html: str) -> str:
     return html[start:html.index("</script>", start)]
 
 
-def test_no_click_to_focus(tmp_path):
-    """The prototype's dimming was on click. Nothing in the interaction block may
-    listen for one, and nothing may dim by opacity (vis ignores it on the draw)."""
+def test_click_focus_dims_what_is_not_connected(tmp_path):
+    """L24: the user asked for it explicitly - click a node and the nodes that are not
+    connected to it dim down, and they stay that way until you click away. The focus set
+    is the node plus its 1-hop neighbours, the same set the hover focus uses."""
     html, _ = _render(tmp_path, 900, 3)
     block = _ux_block(html)
-    assert "network.on('click'" not in block
-    assert "selectNode" not in block
+    assert "network.on('click', function (p) {" in block
+    assert "setClick(p.nodes[0]);" in block
+    assert "else clearClick();" in block
+    assert "function neighbourhood(id)" in block
+    assert "network.getConnectedNodes(id)" in block
+    # Escape and a second click on the same node clear it
+    assert "if (e.key === 'Escape') clearClick();" in block
+    assert "if (clickOn && clickNode === id) { clearClick(); return; }" in block
+    # the hover focus must not fight it
+    assert "if (clickOn) return;              // a clicked focus owns the picture" in block
+
+
+def test_click_focus_never_uses_opacity(tmp_path):
+    """The dim is a colour blend on the node instances, never `opacity` (vis ignores
+    opacity on the draw) and never a DataSet update (1886 nodes measured 149.6 ms)."""
+    html, _ = _render(tmp_path, 900, 3)
+    block = _ux_block(html)
     assert "opacity" not in block
+    assert "nodesDS.update" not in block
+    assert "nc.background = d; nc.border = d;" in block
 
 
 def test_zoom_is_clamped_around_the_fit(tmp_path):

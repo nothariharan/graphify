@@ -673,7 +673,12 @@ _UX_JS = """
     if (!d) { d = mix(hex, 0.55); dimCache.set(hex, d); }
     return d;
   }
-  var hoverTimer = 0, hoverOn = false;
+  var hoverTimer = 0, hoverOn = false, hoverKeep = null;
+  // Click focus (#perf L24): the node you clicked and the nodes connected to it keep
+  // their colour, everything else dims, and it stays that way until you click away.
+  // The user asked for this explicitly; the hover focus below is the same picture,
+  // but it goes away the moment the pointer does.
+  var clickOn = false, clickNode = null, clickKeep = null;
   function paint(keep) {
     for (var nid in nodesObj) {
       var n = nodesObj[nid];
@@ -684,19 +689,48 @@ _UX_JS = """
       else { var d = dimOf(o.bg); nc.background = d; nc.border = d; }
     }
   }
-  function setHover(id) {
-    if (gestureActive()) return;      // never fight a drag or a zoom
+  function neighbourhood(id) {
     var keep = new Set([id]);
     var one = network.getConnectedNodes(id) || [];
     for (var i = 0; i < one.length; i++) keep.add(one[i]);
+    return keep;
+  }
+  function setHover(id) {
+    if (gestureActive()) return;      // never fight a drag or a zoom
+    if (clickOn) return;              // a clicked focus owns the picture
+    var keep = neighbourhood(id);
     paint(keep);
+    hoverKeep = keep;
     hoverOn = true;
     network.redraw();
   }
   function clearHover() {
     if (!hoverOn) return;
+    if (clickOn) return;              // the clicked focus stays
     paint(null);
+    hoverKeep = null;
     hoverOn = false;
+    network.redraw();
+  }
+  function setClick(id) {
+    if (gestureActive()) return;
+    if (clickOn && clickNode === id) { clearClick(); return; }   // click again to clear
+    clickKeep = neighbourhood(id);
+    clickNode = id;
+    clickOn = true;
+    hoverOn = false;
+    paint(clickKeep);
+    network.redraw();
+  }
+  function clearClick() {
+    if (!clickOn) return;
+    clickOn = false; clickNode = null; clickKeep = null;
+    // Everything comes back, including the node under the pointer: the click focus was
+    // an explicit "I am working on this one", and dismissing it must visibly dismiss
+    // it. The hover focus returns on the next pointer move.
+    hoverKeep = null;
+    hoverOn = false;
+    paint(null);
     network.redraw();
   }
   network.on('hoverNode', function (p) {
@@ -708,6 +742,14 @@ _UX_JS = """
     hoverTimer = setTimeout(clearHover, 140);
   });
   network.on('dragStart', function () { clearTimeout(hoverTimer); clearHover(); });
+  network.on('click', function (p) {
+    if (p && p.nodes && p.nodes.length) setClick(p.nodes[0]);
+    else clearClick();               // clicked empty space
+  });
+  network.on('hideNode', function (p) { if (p && p.node === clickNode) clearClick(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') clearClick();
+  });
 
   // ---- 3. frame HUD on H ----------------------------------------------
   var hud = document.createElement('div');

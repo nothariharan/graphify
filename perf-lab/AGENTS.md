@@ -42,9 +42,9 @@ behave worse is a regression.
 7. **Never `--use-gl=swiftshader`** for a WebGL measurement, and never treat a single run's
    absolute fps as a result (§4).
 
-## 3. Where things stand (shipped in the exporter, working tree `56c7de44`)
+## 3. Where things stand (shipped in the exporter, working tree `38a68cbc`)
 
-`graphify/exporters/html.py` — sha256 `56c7de44ea855e029915fcce9182878128142814914ccfcff081e77f847775c2`
+`graphify/exporters/html.py` — sha256 `38a68cbc7f064d92f6c714cec623cc1453cc363fb24f427cac8ecba51186d08e`
 (uncommitted at the time of writing; the last commit that touched it is `716c421e`).
 
 | lever | what it does | gate |
@@ -58,6 +58,7 @@ behave worse is a regression.
 | curve fidelity | the batch draws the same quadratic vis draws at rest (`_curveTo` reproduces `_getViaCoordinates` for `continuous`), verified against `edgeType.getViaNode()` on all 3876 edges, worst disagreement 0.0 | — |
 | eased zoom (L13) | wheel events accumulate a target scale, one redraw per rAF frame, the world point under the cursor held fixed, clamped `fit/6 … min(2.0, fit*12)`; vis's own wheel handler bypassed | same gate as the lean |
 | hover focus (L13) | hovered node + 1-hop keep their colour, the rest blend 55% toward `--bg`; written on the node instances (never `nodesDS.update`), restored on blur | same gate as the lean |
+| click focus (L24) | the same picture, made sticky: click a node and everything not connected to it dims down until you click away (empty space, the same node, or Escape). The hover focus is suppressed while it is active, so moving the pointer cannot wipe it | same gate as the lean |
 | colour-preserving selection (L13) | highlight/hover keep the community fill and add a white border ring; no `#ffffff` fill anywhere | always |
 | frame HUD (L13) | fps + frame ms, toggled with `H`, textContent only | same gate as the lean |
 
@@ -66,11 +67,11 @@ HEAD build): **node drag 40.4 → 82.9 fps (x2.05), pan 39.1 → 78.9 (x2.02), z
 (x5.29)**, stalled frames (>33 ms) 13/14/91 per 90 → 1/1/0. Across all certified runs of this
 lever the paired ratio spans **x1.7–x5.8**.
 
-Shipped artifact: `variants/base-ours-v12.html` (1977969 bytes, sha256
-`e720f6cb629a3281bc5b1fe3997224120ef3cd7c918b8910fe77530dabeacc6e`). Regenerate it
+Shipped artifact: `variants/base-ours-v13.html` (1979741 bytes, sha256
+`b0834030b5e7891d4c23c79175edb56dd8cd21d8319c30cc4d618573429b3171`). Regenerate it
 from the working tree with:
 ```powershell
-python harness/build_base.py --graph-json ../worked/rsl-siege-manager/graph.json --name ours-v12
+python harness/build_base.py --graph-json ../worked/rsl-siege-manager/graph.json --name ours-v13
 ```
 If your regenerated artifact's exporter-block hash differs from the above, the exporter moved:
 say so in `LOG.md`, and re-measure before quoting any number in this file.
@@ -114,6 +115,20 @@ and 3 rounds for zoom (`results/ab-rsl-checkout-v12.csv`): 32.0 → 34.2 fps (x1
 L14 certified on this artifact: an idle page draws nothing and wakes up nothing (0 draws,
 0 rAF in 3 s; before the fix 432 rAF wake-ups, because the frame HUD's loop ran for the
 life of the page).
+
+L24 certified on this artifact (`harness/probe_click_focus.mjs`): clicking a node leaves
+38 nodes bright (the node + its 37 neighbours) and dims the other 1848; empty space, the
+same node again, and Escape each restore 1886 / 0. The click focus paints only on a click,
+through the same mechanism as the hover focus, and the A/A control
+(`results/ab-rest-AA-control.csv`, the same build measured against itself) shows the
+harness's own position bias is x1.58 on the resting frame - larger than any difference the
+click focus could produce.
+
+**The open is faster because of the layout cache** (`harness/probe_reopen.mjs`, three opens
+in one browser context): ours 4538 ms first open -> **363 ms** re-open (the stabilized
+positions are kept in localStorage, so vis's solver is skipped); the official build
+4848 ms -> 4416 ms, because it runs the solver on every open. The *first* open in a fresh
+browser still pays the solver - that is the `--bake` lever.
 
 L12 (edge batch at rest) on v9 (`results/ab-rest-L12.csv`, interleaved 3 rounds, v8 vs v9):
 rest p50 85.0 → 79.9 ms (x0.94), hover 88.0 → 73.8 ms (x0.84), all six pairs favour v9. At-rest
