@@ -166,3 +166,5 @@
 2026-10-22 09:13:36+0530	21.7s	exit=0	L28: capability probe on v15 (legend toggle still works)	node harness/probe_capabilities.mjs --file variants/base-ours-v15.html
 2026-10-22 09:15:40+0530	124.1s	exit=0	L28: the resting frame must not move	node harness/ab_rest.mjs --variants v14=variants/base-ours-v14.html,v15=variants/base-ours-v15.html --rounds 3 --frames 40 --out results/ab-rest-L28.csv
 2026-10-22 09:20:17+0530	8.4s	exit=0	L28: smoke the v15 view	node harness/smoke_view.mjs --file view/after.html
+2026-10-22 09:26:32+0530	326.6s	exit=0	final certification: official v8 vs the shipped v15 (5 rounds)	node harness/ab_drag.mjs --variants official=variants/base-official-v8.html,v15=variants/base-ours-v15.html --rounds 5 --gestures node,pan,zoom --steps 90 --out results/ab-rsl-official-v15.csv
+2026-10-22 09:29:32+0530	166.8s	exit=0	final certification: rest + hover, official vs v15	node harness/ab_rest.mjs --variants official=variants/base-official-v8.html,v15=variants/base-ours-v15.html --rounds 3 --frames 40 --out results/ab-rest-official-v15.csv

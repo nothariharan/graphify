@@ -105,12 +105,12 @@ There is no single "current graphify" to compare against. The ladder, oldest to 
 build. The official `main` branch is *older* than its own `v8` branch, and the `v1.0.0` tag
 is from 2026-04-05, so "the latest official" is `origin/v8` @ 847a93f3.
 
-Against the official, 5 interleaved rounds (`results/ab-rsl-official-v12.csv`): node drag
-15.4 → 36.0 fps (x2.34, jank 89 → 22), pan 15.4 → 37.5 (x2.44, jank 89 → 23), zoom
-6.6 → 35.8 (x5.42, jank 91 → 18). Rest and hover, 3 rounds
-(`results/ab-rest-official-v12.csv`): rest 179.4 → 26.0 ms (x0.14), hover 171.8 → 27.3 ms
-(x0.16) - the official's numbers are noisy because a full repaint of 5762 strokes costs
-wildly different amounts from moment to moment.
+Against the official, 5 interleaved rounds on the **shipped** build
+(`results/ab-rsl-official-v15.csv`): node drag 15.1 → 35.3 fps (x2.34, jank 89 → 24), pan
+15.4 → 36.1 (x2.34, jank 89 → 17), zoom 6.4 → 35.5 (x5.55, jank 91 → 21). Rest and hover,
+3 rounds (`results/ab-rest-official-v15.csv`): rest 184.1 → 29.1 ms (x0.16), hover
+183.7 → 29.9 ms (x0.16). The earlier certification of the same levers on v11 is in
+`results/ab-rsl-official-v12.csv` (x2.34 / x2.44 / x5.42).
 
 Against the user's own checkout, 5 interleaved rounds (`results/ab-rsl-checkout-v12-5r.csv`):
 node drag 38.3 → 36.9 fps (x0.96, jank 20 → 16), pan 30.8 → 37.2 fps (x1.21, jank 38 → 19),
