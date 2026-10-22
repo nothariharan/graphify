@@ -42,9 +42,9 @@ behave worse is a regression.
 7. **Never `--use-gl=swiftshader`** for a WebGL measurement, and never treat a single run's
    absolute fps as a result (§4).
 
-## 3. Where things stand (shipped in the exporter, working tree `38e92871`)
+## 3. Where things stand (shipped in the exporter, working tree `798a9d56`)
 
-`graphify/exporters/html.py` — sha256 `38e9287169a6fb617e638ffc4335dfeec1ff3743a0799e50aa0f44d8dede93fc`
+`graphify/exporters/html.py` — sha256 `798a9d56ba9fc5db9f52aeefb817a4c24ef6342751dd290c4ec58771149adb90`
 (uncommitted at the time of writing; the last commit that touched it is `716c421e`).
 `graphify/exporters/base.py` — sha256 `9c2be12740855a38bdfc2b1b727b2bea494cdb26b1640a61626bada67282b3a8`
 (the two community palettes).
@@ -65,6 +65,7 @@ behave worse is a regression.
 | frame HUD (L13) | fps + frame ms, toggled with `H`, textContent only | same gate as the lean |
 | light theme (L25) | the community palette is the SAME in both themes (a darkened light variant was tried and rejected by the user); what follows the theme is the edge colour/opacity (0.7 dark, 0.92 light), the selection ring (white was invisible on white) and the dimming amount (0.55 / 0.42) | always |
 | adjacency-aware community colours (L27) | the palette is assigned to the communities by a greedy colouring of the community adjacency graph, so two families that share an edge never share a colour (20 of 226 adjacent pairs collided before, 0 now) | always |
+| hover without rebuilding the world (L29) | the arrowhead reveal writes the edge INSTANCE (never edgesDS.update, which recomputes the body and invalidates the batch cache - a 100-300 ms stall per hover in a dense cluster), the batch skips arrowed edges at draw time, and the hover repaint is coalesced to one per frame with a delta paint | same gate as the lean |
 | families panel (L28) | every community is a row (colour, name, size), a filter box narrows the list, clicking a name shows that family alone, a colour strip shows one colour's families, and a bulk change is spread over four frames | always |
 
 Certified (`results/ab-rsl-v7-certified.csv`, rsl 1886/3876, interleaved 3 rounds vs a fresh
@@ -72,11 +73,11 @@ HEAD build): **node drag 40.4 → 82.9 fps (x2.05), pan 39.1 → 78.9 (x2.02), z
 (x5.29)**, stalled frames (>33 ms) 13/14/91 per 90 → 1/1/0. Across all certified runs of this
 lever the paired ratio spans **x1.7–x5.8**.
 
-Shipped artifact: `variants/base-ours-v16.html` (2006609 bytes, sha256
-`31ec4a774a11de35f8e02f8f63d3c05ae1d03e1d19f1b0cb21aa572bba1f2c9e`). Regenerate it
+Shipped artifact: `variants/base-ours-v18.html` (2008327 bytes, sha256
+`3386aa683ea5a02b76f82cd4c4e349a9f2903553e33d949fdb2824d3edba96c6`). Regenerate it
 from the working tree with:
 ```powershell
-python harness/build_base.py --graph-json ../worked/rsl-siege-manager/graph.json --name ours-v16
+python harness/build_base.py --graph-json ../worked/rsl-siege-manager/graph.json --name ours-v18
 ```
 If your regenerated artifact's exporter-block hash differs from the above, the exporter moved:
 say so in `LOG.md`, and re-measure before quoting any number in this file.
@@ -344,7 +345,7 @@ hypothesis in it *before* you measure.
 
 1. Read this file, `STATE.md` tick status, the last 20 lines of `LOG.md`, the tail of `DECISIONS.tsv`.
 2. `python harness/bench_lock.py status`.
-3. Confirm the shipped artifact is current: rebuild `base-ours-v16.html` and compare the
+3. Confirm the shipped artifact is current: rebuild `base-ours-v18.html` and compare the
    exporter block against the hash above.
 4. `python -m pytest tests/test_html_perf_levers.py -q` (from the repo root) - 43 tests, all
    green, before you change anything.

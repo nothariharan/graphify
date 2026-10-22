@@ -417,18 +417,31 @@ def test_large_graph_gets_the_eased_zoom(tmp_path):
 
 def test_hover_focus_is_hover_only_and_always_restored(tmp_path):
     """Dimming must never survive the pointer leaving the node: blur restores every
-    node, and a drag clears focus before it starts."""
+    node, and a drag clears focus before it starts. The repaint is coalesced to one per
+    frame instead of a debounced timer per event (a hover sweep in the dense centre
+    stalled up to 208 ms), so the restore rides on the next animation frame."""
     html, _ = _render(tmp_path, 900, 3)
     code = _without_js_comments(html)
-    assert "network.on('hoverNode'" in code
-    assert "network.on('blurNode'" in code
-    assert "hoverTimer = setTimeout(clearHover, 140);" in code
-    assert "network.on('dragStart', function () { clearTimeout(hoverTimer); clearHover(); });" in code
+    assert "network.on('hoverNode', function (p) { scheduleHover(p.node); });" in code
+    assert "network.on('blurNode', function () { scheduleHover(null); });" in code
+    assert "network.on('dragStart', function () { scheduleHover(null); });" in code
+    assert "if (!hoverRaf) hoverRaf = requestAnimationFrame(flushHover);" in code
     # focus is reached by mutating the instance colours, never by updating the DataSet
     # (1886-node update measured 149.6ms) and never by writing opacity onto nothing
     assert "nc.background = o.bg; nc.border = o.bd;" in code
     assert "nc.background = d; nc.border = d;" in code
     assert "nodesDS.update" not in html.split("// ---- 2. hover focus")[1].split("// ---- 3.")[0]
+
+
+def test_hover_paint_is_a_delta(tmp_path):
+    """Focus to focus only touches the nodes that change; a full pass is only needed
+    when entering from the all-bright state or clearing."""
+    html, _ = _render(tmp_path, 900, 3)
+    block = _ux_block(html)
+    assert "var paintedKeep = null;" in block
+    assert "prev.forEach(function (id) { if (!keep.has(id)) touched.push(id); });" in block
+    assert "keep.forEach(function (id) { if (!prev.has(id)) touched.push(id); });" in block
+    assert "var full = !prev || !keep;" in block
 
 
 def _ux_block(html: str) -> str:
@@ -603,14 +616,19 @@ def test_interaction_block_is_absent_on_small_graphs(tmp_path):
         assert marker not in html
 
 
-def test_dense_arrow_reveal_is_batched_not_per_edge(tmp_path):
-    """The old code called edgesDS.update() once per edge, and every one of those
-    made vis recompute _updateVisibleIndices + _updateValueRange over all nodes and
-    all edges. One batched update for the whole diff instead."""
-    html, _ = _render(tmp_path, 120, 25)
+def test_dense_arrow_reveal_never_touches_the_dataset(tmp_path):
+    """The reveal used to run one batched edgesDS.update() per hover. Even batched, that
+    makes vis recompute _updateVisibleIndices + _updateValueRange over all nodes and all
+    edges AND invalidates the batched edge pass, which then re-reads the formatting values
+    of all 3876 edges: a 100-200 ms stall on a hover in a dense cluster. The arrow flag is
+    written onto the edge instance instead, and the batch skips arrowed edges at draw
+    time."""
+    html, _ = _render(tmp_path, 900, 3)
     assert "function _syncArrows()" in html
-    assert "edgesDS.update(upd);" in html
-    assert not re.search(r"edgesDS\.update\(\{\s*id:", html)
+    assert "function _setArrow(id, on)" in html
+    assert "e.options.arrows.to.enabled = on;" in html
+    assert "edgesDS.update" not in html.split("const _arrowOn")[1].split("network.on('hoverNode'")[0]
+    assert "if (_arrowed(et)) continue;" in html
     # suppressed while dragging, resynced once on release
     assert "if (!_dragging) _syncArrows();" in html
 

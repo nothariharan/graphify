@@ -42,15 +42,24 @@ _ARROW_HOVER_JS = """
 // node (all its incident edges), to see the arrowheads.
 //
 // Two rules keep this off the hot path (measured with harness/profile_drag.mjs):
-//   1. BATCH. Every edgesDS.update() makes vis run _updateVisibleIndices() plus
-//      _updateValueRange() over ALL nodes and ALL edges and request a redraw. The
-//      earlier per-edge update loop did that once per arrow flipped, so hovering a
-//      hub node fired dozens of full body recomputes; a node drag fell to 17.8fps
-//      vs 44fps with hover off. One batched update per hover change instead.
+//   1. NO DATASET. Every edgesDS.update() makes vis run _updateVisibleIndices() plus
+//      _updateValueRange() over ALL nodes and ALL edges, request a redraw, AND invalidates
+//      the batched edge pass (which then re-reads the formatting values of all 3876
+//      edges). On a hover that landed as a 100-200 ms stall in a dense cluster. The arrow
+//      flag is written onto the edge INSTANCE instead: vis's draw reads it from there, and
+//      the batch skips arrowed edges at draw time, so nothing has to be rebuilt.
 //   2. NO CHURN DURING A DRAG. Hover events fired mid-pull are noise; they made the
 //      graph feel like it was fighting the pointer. Defer, then resync once on dragEnd.
 const _arrowOn = new Set();
 let _hoverNode = null, _hoverEdge = null, _dragging = false;
+function _setArrow(id, on) {
+  const e = network.body && network.body.edges && network.body.edges[id];
+  if (!e || !e.options) return;
+  if (!e.options.arrows) e.options.arrows = {};
+  if (!e.options.arrows.to) e.options.arrows.to = {};
+  e.options.arrows.to.enabled = on;
+  if (on) e.options.arrows.to.scaleFactor = 0.5;
+}
 function _syncArrows() {
   const want = new Set();
   if (_hoverEdge !== null) want.add(_hoverEdge);
@@ -58,15 +67,14 @@ function _syncArrows() {
     const inc = network.getConnectedEdges(_hoverNode);
     for (const id of inc) want.add(id);
   }
-  const upd = [];
+  let changed = false;
   for (const id of _arrowOn) {
-    if (!want.has(id)) { _arrowOn.delete(id); upd.push({ id: id, arrows: { to: { enabled: false } } }); }
+    if (!want.has(id)) { _arrowOn.delete(id); _setArrow(id, false); changed = true; }
   }
   for (const id of want) {
-    if (!_arrowOn.has(id)) { _arrowOn.add(id); upd.push({ id: id, arrows: { to: { enabled: true, scaleFactor: 0.5 } } }); }
+    if (!_arrowOn.has(id)) { _arrowOn.add(id); _setArrow(id, true); changed = true; }
   }
-  if (!upd.length) return;
-  try { edgesDS.update(upd); } catch (e) {}
+  if (changed) { try { network.redraw(); } catch (e) {} }
 }
 network.on('hoverNode', function (p) { _hoverNode = p.node; if (!_dragging) _syncArrows(); });
 network.on('blurNode', function () { _hoverNode = null; if (!_dragging) _syncArrows(); });
@@ -247,6 +255,9 @@ const _EDGE_BATCH = (function () {
       g.beginPath();
       for (let j = 0; j < ets.length; j++) {
         const et = ets[j];
+        // An arrowed edge is drawn by vis (it needs the arrowhead); the group keeps it so
+        // the arrow flag can be flipped on the instance without a rebuild.
+        if (_arrowed(et)) continue;
         g.moveTo(et.fromPoint.x, et.fromPoint.y);
         _curveTo(g, et);
       }
@@ -742,21 +753,37 @@ _UX_JS = """
     } catch (e) {}
     return v;
   }
-  var hoverTimer = 0, hoverOn = false, hoverKeep = null;
+  var hoverOn = false, hoverKeep = null;
   // Click focus (#perf L24): the node you clicked and the nodes connected to it keep
   // their colour, everything else dims, and it stays that way until you click away.
   // The user asked for this explicitly; the hover focus below is the same picture,
   // but it goes away the moment the pointer does.
   var clickOn = false, clickNode = null, clickKeep = null;
+  // The paint is a DELTA: the set that is currently bright is remembered, so moving the
+  // pointer from one node to the next only restores the nodes that leave the focus and
+  // dims the ones that join it - not all 1886. A full pass is only needed when entering a
+  // focus from the all-bright state, or when clearing it.
+  var paintedKeep = null;
+  function applyNode(nid, keep) {
+    var n = nodesObj[nid];
+    var nc = n && n.options && n.options.color;
+    var o = orig.get(nid);
+    if (!nc || typeof nc !== 'object' || !o) return;
+    if (!keep || keep.has(nid)) { nc.background = o.bg; nc.border = o.bd; }
+    else { var d = dimOf(o.bg); nc.background = d; nc.border = d; }
+  }
   function paint(keep) {
-    for (var nid in nodesObj) {
-      var n = nodesObj[nid];
-      var nc = n && n.options && n.options.color;
-      var o = orig.get(nid);
-      if (!nc || typeof nc !== 'object' || !o) continue;
-      if (!keep || keep.has(nid)) { nc.background = o.bg; nc.border = o.bd; }
-      else { var d = dimOf(o.bg); nc.background = d; nc.border = d; }
+    var prev = paintedKeep;
+    var full = !prev || !keep;
+    if (full) {
+      for (var nid in nodesObj) applyNode(nid, keep);
+    } else {
+      var touched = [];
+      prev.forEach(function (id) { if (!keep.has(id)) touched.push(id); });
+      keep.forEach(function (id) { if (!prev.has(id)) touched.push(id); });
+      for (var i = 0; i < touched.length; i++) applyNode(touched[i], keep);
     }
+    paintedKeep = keep ? new Set(keep) : null;
   }
   function neighbourhood(id) {
     var keep = new Set([id]);
@@ -764,22 +791,34 @@ _UX_JS = """
     for (var i = 0; i < one.length; i++) keep.add(one[i]);
     return keep;
   }
-  function setHover(id) {
+  // Hover is coalesced to one repaint per frame instead of one per event with a 70 ms
+  // debounce: moving the pointer across a dense cluster used to queue a full frame per
+  // node it crossed (measured: a hover sweep in the dense centre stalled up to 208 ms).
+  var pendingHover, hoverRaf = 0;
+  function flushHover() {
+    hoverRaf = 0;
+    var id = pendingHover;
+    pendingHover = undefined;
+    if (id === undefined) return;
     if (gestureActive()) return;      // never fight a drag or a zoom
     if (clickOn) return;              // a clicked focus owns the picture
+    if (id === null) {
+      if (!hoverOn) return;
+      paint(null);
+      hoverKeep = null;
+      hoverOn = false;
+      network.redraw();
+      return;
+    }
     var keep = neighbourhood(id);
     paint(keep);
     hoverKeep = keep;
     hoverOn = true;
     network.redraw();
   }
-  function clearHover() {
-    if (!hoverOn) return;
-    if (clickOn) return;              // the clicked focus stays
-    paint(null);
-    hoverKeep = null;
-    hoverOn = false;
-    network.redraw();
+  function scheduleHover(id) {
+    pendingHover = id;
+    if (!hoverRaf) hoverRaf = requestAnimationFrame(flushHover);
   }
   function setClick(id) {
     if (gestureActive()) return;
@@ -802,15 +841,9 @@ _UX_JS = """
     paint(null);
     network.redraw();
   }
-  network.on('hoverNode', function (p) {
-    clearTimeout(hoverTimer);
-    hoverTimer = setTimeout(function () { setHover(p.node); }, 70);
-  });
-  network.on('blurNode', function () {
-    clearTimeout(hoverTimer);
-    hoverTimer = setTimeout(clearHover, 140);
-  });
-  network.on('dragStart', function () { clearTimeout(hoverTimer); clearHover(); });
+  network.on('hoverNode', function (p) { scheduleHover(p.node); });
+  network.on('blurNode', function () { scheduleHover(null); });
+  network.on('dragStart', function () { scheduleHover(null); });
   network.on('click', function (p) {
     if (p && p.nodes && p.nodes.length) setClick(p.nodes[0]);
     else clearClick();               // clicked empty space

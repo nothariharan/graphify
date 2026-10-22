@@ -116,7 +116,7 @@ const out = await page.evaluate(async () => {
   }
 
   const rows = [];
-  for (const mult of [1, 2, 4, 8, 12, 24]) {
+  for (const mult of [1, 4, 8, 16, 24]) {
     const scale = Math.min(2.0, fit * mult);
     network.moveTo({ position: { x: centre.x, y: centre.y }, scale: scale, animation: false });
     await wait(500);

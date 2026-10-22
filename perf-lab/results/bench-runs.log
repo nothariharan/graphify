@@ -179,3 +179,14 @@
 2026-10-22 12:37:31+0530	29.7s	exit=0	zoom lag: is it the labels at high zoom? fit through the 2.0 clamp	node harness/probe_zoom_split.mjs --file variants/base-ours-v16.html
 2026-10-22 12:38:34+0530	24.7s	exit=0	zoom lag: the frame vs the hover sweep at the dense centre	node harness/probe_zoom_interact.mjs --file variants/base-ours-v16.html
 2026-10-22 12:39:12+0530	24.6s	exit=0	zoom lag: same probe, reversed zoom order (is x8 real or an artifact?)	node harness/probe_zoom_interact.mjs --file variants/base-ours-v16.html
+2026-10-22 13:12:51+0530	27.5s	exit=0	L29: the culled batch, frame split at fit / x4 / x8 / x16 / x24	node harness/probe_zoom_split.mjs --file variants/base-ours-v17.html
+2026-10-22 13:13:47+0530	16.7s	exit=0	L29: the synchronous draw, v16 vs v17 (culled)	node harness/probe_draw_sync.mjs --file variants/base-ours-v17.html
+2026-10-22 13:14:01+0530	13.7s	exit=0	L29: the same on v16 (before the cull)	node harness/probe_draw_sync.mjs --file variants/base-ours-v16.html
+2026-10-22 13:19:22+0530	42.2s	exit=0	L29: hover sweep at the dense centre, v16 (debounced) vs v17 (coalesced)	node harness/probe_zoom_interact.mjs --file variants/base-ours-v16.html
+2026-10-22 13:20:09+0530	46.5s	exit=0	L29: the same on v17	node harness/probe_zoom_interact.mjs --file variants/base-ours-v17.html
+2026-10-22 13:28:09+0530	87.8s	exit=0	L29: hover sweep, v16 (debounced + DataSet arrows) vs v18 (coalesced + instance arrows)	node harness/probe_zoom_interact.mjs --file variants/base-ours-v16.html
+2026-10-22 13:29:11+0530	61.7s	exit=0	L29: the same on v18	node harness/probe_zoom_interact.mjs --file variants/base-ours-v18.html
+2026-10-22 13:37:03+0530	442.3s	exit=0	L29: interleaved rest+hover A/B, v16 vs v18	node harness/ab_rest.mjs --variants v16=variants/base-ours-v16.html,v18=variants/base-ours-v18.html --rounds 5 --frames 40 --out results/ab-rest-L29.csv
+2026-10-22 13:37:52+0530	48.4s	exit=0	L29: arrowhead + selection + legend still work on v18	node harness/probe_capabilities.mjs --file variants/base-ours-v18.html
+2026-10-22 13:39:01+0530	36.7s	exit=0	L29: the arrowhead on a hovered edge, v18	node harness/probe_capabilities.mjs --file variants/base-ours-v18.html
+2026-10-22 13:42:21+0530	13.8s	exit=0	L29: smoke the v18 view	node harness/smoke_view.mjs --file view/after.html
