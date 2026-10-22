@@ -494,26 +494,19 @@ def test_filter_only_updates_the_families_that_changed(tmp_path):
     assert "if (!changed.length)" in html
 
 
-def test_neighbouring_communities_never_share_a_colour(tmp_path):
-    """With 141 communities and 10 colours, cid % 10 put 20 of the 226 adjacent community
-    pairs on the same colour, so two neighbouring clusters read as one. A greedy colouring
-    of the community adjacency graph brings that to 0."""
-    import networkx as _nx
-    from graphify.exporters.html import _community_color_map
-
-    G = _nx.Graph()
-    comm = {}
-    for i in range(60):
-        cid = i % 12
-        comm[f"n{i}"] = cid
-        G.add_node(f"n{i}", community=cid)
-    # a chain of communities, each linked to the next
-    for i in range(60 - 1):
-        G.add_edge(f"n{i}", f"n{i + 1}")
-    mapping = _community_color_map(G, comm, 10)
-    assert len(mapping) == 12
-    for i in range(11):
-        assert mapping[i] != mapping[i + 1], mapping
+def test_community_colouring_is_the_shipped_one(tmp_path):
+    """Palette index = community id modulo the palette size, exactly what the shipped
+    viewer does. An adjacency-aware greedy colouring was tried and reverted: it hands
+    every non-adjacent community the lowest free index, so whole regions collapse onto
+    one colour and the picture loses the variety the families are read by. The
+    classification is part of the look, not a perf lever."""
+    html, _ = _render(tmp_path, 120, 25)
+    m = re.search(r"const COMMUNITY_COLOUR = (\{.*?\});", html, re.S)
+    assert m, "the page must carry the community -> palette index map"
+    mapping = m.group(1)
+    for cid in range(5):
+        assert f'"{cid}": {cid % 10}' in mapping, mapping
+    assert "_community_color_map" not in html
 
 
 def test_community_palette_is_the_same_in_both_themes(tmp_path):

@@ -121,3 +121,21 @@ when the node is big enough on screen) is the same idea as the node disc and is 
 
 **H5 (a numpy force layout in Python) is the only route to a fast first open** and is the
 open question, not a finding.
+
+
+## Reversed: the colouring is the shipped one again (the user's call)
+
+The adjacency-aware greedy colouring above was wrong for the picture, and the user caught
+it: it gives every non-adjacent community the **lowest free palette index**, so large regions
+collapsed onto one colour (their top-left screenshot: the shipped viewer has a dozen colours
+there, ours had one). The metric the lane optimised - "adjacent community pairs sharing a
+colour" - is not the metric the eye reads; variety across the map is.
+
+The exporter is back to `palette[cid % len(palette)]`, which is what the shipped viewer has
+always done, so a family has the same colour it has in the before version. The 20-of-226
+adjacent collisions that motivated the greedy colouring are a property of that design and
+are accepted; the classification is part of the viewer's look, not a perf lever.
+
+If more variety than ten colours is ever wanted, the honest version is a *larger* palette
+(e.g. ten hues x lightness steps for 141 families), not a colouring that reuses the low
+indices - but that changes the mapping, and the user asked for the shipped mapping.

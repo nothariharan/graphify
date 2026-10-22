@@ -204,3 +204,5 @@
 2026-10-22 15:22:45+0530	9.9s	exit=0	L31: instant wheel response, ours vs the official	node harness/probe_zoom_gesture.mjs --file variants/base-ours-v20.html
 2026-10-22 15:23:17+0530	5.9s	exit=0	L31: smoke v20	node harness/smoke_view.mjs --file view/after.html
 2026-10-22 15:23:34+0530	16.5s	exit=0	L31: click focus + arrows still fine on v20	node harness/probe_capabilities.mjs --file variants/base-ours-v20.html
+2026-10-22 18:13:17+0530	18.7s	exit=0	colours: the shipped assignment back, top-left corner	node harness/shot_page.mjs --file variants/base-ours-v21.html --out shots/colours-v21.png --theme dark
+2026-10-22 18:14:38+0530	14.7s	exit=0	v21: smoke	node harness/smoke_view.mjs --file view/after.html

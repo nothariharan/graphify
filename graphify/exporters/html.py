@@ -455,39 +455,6 @@ def _viz_node_limit() -> int:
     except ValueError:
         return MAX_NODES_FOR_VIZ
 
-def _community_color_map(G, node_community, palette_size: int) -> dict:
-    """Assign a palette index to every community so that two communities which share an
-    edge never get the same colour.
-
-    With 141 communities and 10 colours, `cid % 10` puts 14 communities on every colour
-    and 20 of the 226 adjacent community pairs came out the same colour, so the eye
-    reads two neighbouring clusters as one. A greedy colouring of the community
-    adjacency graph brings that to 0 and costs nothing at render time.
-    """
-    adj: dict = {}
-    try:
-        for u, v in G.edges():
-            cu = node_community.get(u, 0)
-            cv = node_community.get(v, 0)
-            if cu == cv:
-                continue
-            adj.setdefault(cu, set()).add(cv)
-            adj.setdefault(cv, set()).add(cu)
-    except Exception:
-        adj = {}
-    sizes: dict = {}
-    for cid in node_community.values():
-        sizes[cid] = sizes.get(cid, 0) + 1
-    order = sorted(set(sizes) | set(adj), key=lambda c: (-sizes.get(c, 0), c))
-    assigned: dict = {}
-    for cid in order:
-        used = {assigned[n] for n in adj.get(cid, ()) if n in assigned}
-        pick = 0
-        while pick in used and pick < palette_size - 1:
-            pick += 1
-        assigned[cid] = pick
-    return assigned
-
 
 def _html_styles() -> str:
     return """<style>
@@ -996,8 +963,8 @@ const network = new vis.Network(container, {{ nodes: nodesDS, edges: edgesDS }},
 const THEME_KEY = 'graphify-theme';
 const themeMQ = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
 const PALETTE = {_PAL_JS};
-// The palette index of every community (see _community_color_map): neighbouring
-// communities never share a colour, so two adjacent clusters never read as one.
+// The palette index of every community: community id modulo the palette size, exactly
+// what the shipped viewer has always done. The classification is part of the look.
 const COMMUNITY_COLOUR = {community_colour_json};
 let themeIsLight = false;
 function palByIndex(i) {{
@@ -1577,10 +1544,13 @@ def to_html(
     _RING = {"preferred": "#22c55e", "contested": "#f59e0b"}
 
     # Build nodes list for vis.js
-    # The community colours are assigned so that neighbouring communities never share
-    # one (see _community_color_map): with 141 communities and 10 colours, the plain
-    # cid % 10 put 20 of the 226 adjacent pairs on the same colour.
-    community_colour = _community_color_map(G, node_community, len(COMMUNITY_COLORS))
+    # Community colouring is the one the shipped viewer has always used: palette index =
+    # community id modulo the palette size. An adjacency-aware greedy colouring was tried
+    # (so two neighbouring families never share a colour) and it was wrong for the picture:
+    # it hands every non-adjacent community the lowest free index, so whole regions collapse
+    # onto one colour and the graph loses the variety the user reads the families by. The
+    # classification is part of the viewer's look, not a perf lever: leave it alone.
+    community_colour = {cid: cid % len(COMMUNITY_COLORS) for cid in set(node_community.values())}
     vis_nodes = []
     for node_id, data in G.nodes(data=True):
         cid = node_community.get(node_id, 0)

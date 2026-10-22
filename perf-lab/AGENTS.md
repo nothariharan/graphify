@@ -64,7 +64,7 @@ behave worse is a regression.
 | colour-preserving selection (L13) | highlight/hover keep the community fill and add a white border ring; no `#ffffff` fill anywhere | always |
 | frame HUD (L13) | fps + frame ms, toggled with `H`, textContent only | same gate as the lean |
 | light theme (L25) | the community palette is the SAME in both themes (a darkened light variant was tried and rejected by the user); what follows the theme is the edge colour/opacity (0.7 dark, 0.92 light), the selection ring (white was invisible on white) and the dimming amount (0.55 / 0.42) | always |
-| adjacency-aware community colours (L27) | the palette is assigned to the communities by a greedy colouring of the community adjacency graph, so two families that share an edge never share a colour (20 of 226 adjacent pairs collided before, 0 now) | always |
+| community colours (L27) | palette[cid % len(palette)], exactly what the shipped viewer does. An adjacency-aware greedy colouring was tried and REVERTED: it gave every non-adjacent family the lowest free index, so whole regions collapsed onto one colour. Variety is the metric the eye reads, not adjacent-pair collisions | always |
 | hover without rebuilding the world (L29) | the arrowhead reveal writes the edge INSTANCE (never edgesDS.update, which recomputes the body and invalidates the batch cache - a 100-300 ms stall per hover in a dense cluster), the batch skips arrowed edges at draw time, and the hover repaint is coalesced to one per frame with a delta paint | same gate as the lean |
 | families panel (L28) | every community is a row (colour, name, size), a filter box narrows the list, clicking a name shows that family alone, a colour strip shows one colour's families, and a bulk change is spread over four frames | always |
 
@@ -245,8 +245,7 @@ moving the layout offline),
 below 3:1 contrast on white),
 **L26** sleekness remainder (findings only: the rest frame is now the edge raster, the focus
 paint is cheap, "show all" was a 150 ms freeze - fixed by L28),
-**L27** layout quality + adjacency-aware community colours (shipped; 20 of 226 adjacent
-community pairs shared a colour, now 0),
+**L27** layout quality (the community colouring it proposed was reverted - see D76),
 **L28** families panel (shipped; family rows, filter box, isolate, colour strip).
 Parked: **L7** WebGL/sigma (numbers were great — pan 4.8 → 90-110 fps — but the user rejected
 the look and it needs a full rewrite). Do not reopen L7 unless the user asks.
