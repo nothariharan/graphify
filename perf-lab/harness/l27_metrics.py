@@ -3,8 +3,8 @@
 Scores a *point cloud* (positions + community + edges), not a build, so the browser's
 stabilized layout and a numpy-baked layout are measured by the same code on the same graph.
 
-    python harness/l25_metrics.py --dump results/l25-rsl-browser.json
-    python harness/l25_metrics.py --dump results/l25-rsl-np.json --json results/l25-rsl-np-metrics.json
+    python harness/l27_metrics.py --dump results/l27-rsl-browser.json
+    python harness/l27_metrics.py --dump results/l27-rsl-np.json --json results/l27-rsl-np-metrics.json
 
 Everything is derived from the dump:
   node id -> (x, y), community, degree, size, font size

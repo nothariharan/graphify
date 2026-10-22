@@ -1,7 +1,7 @@
-# L25 — sleepy/sleek: what is left in the frame, and what is still visually rough
+# L26 — sleepy/sleek: what is left in the frame, and what is still visually rough
 
 Lane owner: research sub-agent (smoothness / sleekness pass).
-Scratch prefix for every file this lane creates: `L25_` (harness), `L25-` (results, shots).
+Scratch prefix for every file this lane creates: `L26_` (harness), `L26-` (results, shots).
 
 ## The brief
 
@@ -63,17 +63,17 @@ lever exists (one redraw per frame max); measure the ratio before building it.
 
 ## Method (instruments)
 
-Every measured run holds the bench lock. Raw output goes to `results/L25-*.csv|txt`,
-pictures to `shots/L25-*.png`.
+Every measured run holds the bench lock. Raw output goes to `results/L26-*.csv|txt`,
+pictures to `shots/L26-*.png`.
 
 | instrument | what it answers |
 |---|---|
-| `harness/L25_frame_parts.mjs` (new) | where the 26-29 ms goes: stubbed node shapes, edges on/off, a whole-canvas clear, and a per-op count/timing of the real frame (arc/fill/stroke/quadraticCurveTo/fillText) |
-| `harness/L25_rest_ab.mjs` (new) | interleaved in-page A/B of **frame cost at a fixed camera**, alternating two configs every frame (needed for culling, where two builds at different cameras are not comparable) |
-| `harness/L25_cull.mjs` (new) | injects a viewport-culled edge batch into the shipped build, then measures frame cost at fit / 2x / 4x / 8x fit and diffs the visible canvas against the un-culled frame (0-px control included) |
-| `harness/L25_focus_paint.mjs` (new) | cost of `paint()` (full vs delta) and of the redraw that follows; time from `hoverNode` to the painted frame |
-| `harness/L25_dom_costs.mjs` (new) | per-keystroke search cost, tooltip DOM write, sidebar build/scroll, Select All / legend toggle hitch |
-| `harness/L25_drag_rate.mjs` (new) | pointermoves, drag events and redraws per second in a synthetic drag |
+| `harness/L26_frame_parts.mjs` (new) | where the 26-29 ms goes: stubbed node shapes, edges on/off, a whole-canvas clear, and a per-op count/timing of the real frame (arc/fill/stroke/quadraticCurveTo/fillText) |
+| `harness/L26_rest_ab.mjs` (new) | interleaved in-page A/B of **frame cost at a fixed camera**, alternating two configs every frame (needed for culling, where two builds at different cameras are not comparable) |
+| `harness/L26_cull.mjs` (new) | injects a viewport-culled edge batch into the shipped build, then measures frame cost at fit / 2x / 4x / 8x fit and diffs the visible canvas against the un-culled frame (0-px control included) |
+| `harness/L26_focus_paint.mjs` (new) | cost of `paint()` (full vs delta) and of the redraw that follows; time from `hoverNode` to the painted frame |
+| `harness/L26_dom_costs.mjs` (new) | per-keystroke search cost, tooltip DOM write, sidebar build/scroll, Select All / legend toggle hitch |
+| `harness/L26_drag_rate.mjs` (new) | pointermoves, drag events and redraws per second in a synthetic drag |
 | `harness/ab_rest.mjs` (existing) | interleaved A/B of the shipped build vs a variant, through the lock, when a variant exists |
 | `harness/probe_frame_parts.mjs`, `probe_node_time.mjs` (existing) | the L22 split re-run on v13, to know the starting point |
 

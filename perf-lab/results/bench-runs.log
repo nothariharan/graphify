@@ -155,3 +155,14 @@
 2026-10-22 08:55:48+0530	17.5s	exit=0	light mode: the click focus (dimming + ring) on white	node harness/probe_click_focus.mjs --file variants/base-ours-v14.html --theme light --shot shots/light-v14-focus.png
 2026-10-22 08:57:48+0530	9.0s	exit=0	L25: smoke the view with the light theme	node harness/smoke_view.mjs --file view/after.html
 2026-10-22 08:58:14+0530	10.5s	exit=0	L25: smoke the v14 view	node harness/smoke_view.mjs --file view/after.html
+2026-10-22 09:01:55+0530	11.5s	exit=0	L27: dump the layout of the community-coloured build	node harness/l27_dump.mjs --file variants/base-ours-v15.html --out results/l27-rsl-coloured.json
+2026-10-22 09:03:42+0530	28.2s	exit=0	L27: dump with colours, before and after the community colouring	node harness/l27_dump.mjs --file variants/base-ours-v13.html --out results/l27-rsl-before.json
+2026-10-22 09:04:02+0530	19.5s	exit=0	L27: dump with colours, after	node harness/l27_dump.mjs --file variants/base-ours-v15.html --out results/l27-rsl-after.json
+2026-10-22 09:06:18+0530	35.1s	exit=0	L28: can a node be hidden by an instance write (no DataSet update)?	node harness/probe_instance_hidden.mjs --file variants/base-ours-v15.html
+2026-10-22 09:10:16+0530	15.6s	exit=0	L28: does the families panel work, and what does each action cost?	node harness/probe_families.mjs --file variants/base-ours-v15.html --shot shots/L28-families.png
+2026-10-22 09:11:03+0530	15.0s	exit=0	L28: the families panel, after the fix	node harness/probe_families.mjs --file variants/base-ours-v15.html --shot shots/L28-families.png
+2026-10-22 09:12:15+0530	20.9s	exit=0	L28: the families panel with the chunked update	node harness/probe_families.mjs --file variants/base-ours-v15.html --shot shots/L28-families.png
+2026-10-22 09:12:51+0530	15.4s	exit=0	L28: the worst frame during each filter action	node harness/probe_families.mjs --file variants/base-ours-v15.html --shot shots/L28-families.png
+2026-10-22 09:13:36+0530	21.7s	exit=0	L28: capability probe on v15 (legend toggle still works)	node harness/probe_capabilities.mjs --file variants/base-ours-v15.html
+2026-10-22 09:15:40+0530	124.1s	exit=0	L28: the resting frame must not move	node harness/ab_rest.mjs --variants v14=variants/base-ours-v14.html,v15=variants/base-ours-v15.html --rounds 3 --frames 40 --out results/ab-rest-L28.csv
+2026-10-22 09:20:17+0530	8.4s	exit=0	L28: smoke the v15 view	node harness/smoke_view.mjs --file view/after.html

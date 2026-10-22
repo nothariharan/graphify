@@ -1,4 +1,4 @@
-# L25 — the layout: is the hairball the solver, the canvas, the colours, or the labels?
+# L27 — the layout: is the hairball the solver, the canvas, the colours, or the labels?
 
 Status: **hypotheses written before measuring.** Measurements appended below as they land.
 
@@ -88,3 +88,36 @@ gate (free), (3) bake the layout in Python (removes the open cost), (4) a *struc
 ## Results
 
 (filled in below, in measurement order)
+
+
+## Results - and what was adopted from it
+
+The lane ran out of model quota before it finished, but its instruments and its hypotheses
+were good, and the two cheap ones were taken:
+
+**H3 confirmed: the community colour carried no meaning.** With 141 communities and 10
+colours, \cid % 10\ puts 14 communities on every colour, and 20 of the 226 adjacent
+community pairs (8.85% of the pairs, 6.42% of the edge weight) came out the same colour, so
+two neighbouring clusters were painted identically and the eye read them as one.
+
+Fixed by colouring the community adjacency graph greedily (biggest community first): the
+shipped build has **0 colliding adjacent pairs** (\harness/l27_collisions.py\ on the dumps
+of both builds: 20 before, 0 after). The colours are the same ten hues, so the picture does
+not change - only which community gets which hue, and the legend follows.
+
+**H1 confirmed: the ball is isotropic and the canvas is not.** bbox aspect 0.996 against a
+1000x800 canvas, so the fit is height-bound and ~20% of the width is empty margin. An
+x-stretch would not change the number of crossings (affine invariance) and would not change
+the on-screen spacing, so it is cosmetic - not a lever.
+
+**H2 confirmed: the hairball is a density problem, not a solver problem.** spread ratio
+0.0517: the median edge is 37.5 px on screen while the median dot is 0.87 px. 1 886
+sub-pixel dots inside an 800 px square cannot be made legible by a different solver - only by
+showing fewer of them (zoom, the click focus, a family filter).
+
+**H4 not taken: the label gate.** 66 of 1 886 nodes carry a label and they are drawn at
+~1 px at the fit scale, so they are smears rather than labels. The fix (only draw a label
+when the node is big enough on screen) is the same idea as the node disc and is still open.
+
+**H5 (a numpy force layout in Python) is the only route to a fast first open** and is the
+open question, not a finding.

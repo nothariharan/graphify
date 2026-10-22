@@ -259,6 +259,24 @@ physics off), (3) keep capability. Aesthetics levers (straight/discrete) optiona
     `base-ours-v13.html` (`b0834030`), exporter `38a68cbc`, 36/36 tests. Lane
     `lanes/L24-click-focus.md`.
 
+20f. [DONE 2026-10-22] L27 + L28 — the filtering the user asked for. The families panel was
+    built from the community **labels**, so on a graph without labels it was **empty**:
+    there was no family filtering at all, only the node search. Now: every community is a
+    row (colour, the file most of its members come from, size), a filter box narrows the
+    list, clicking a name shows that family alone, a colour strip shows one colour's
+    families, the update only touches the families that changed (show-all is free) and a
+    bulk change is spread over four frames (worst frame 76 ms instead of one 280 ms block).
+    Alongside it, the palette is now assigned by a greedy colouring of the community
+    adjacency graph: **20 of the 226 adjacent community pairs shared a colour before, 0
+    now** (the eye no longer reads two neighbouring clusters as one). Lanes
+    `lanes/L28-families-panel.md` and `lanes/L27-layout-quality.md`. 44/44 tests, artifact
+    `base-ours-v15.html` (`eec347a0`), exporter `37da301b`.
+
+20g. [DONE 2026-10-22] V1 banked: branch `perf/graph-smoothness-v1` at `e42c5ba6` pushed to
+    the user's fork (no PR, main untouched). Everything since then is incremental on top of
+    it. The 30-minute loop is now a **45-minute** loop (the scheduled task's interval was
+    changed to 2 700 000 ms and its prompt rewritten to the current state of the lab).
+
 ## Tick status
 2026-10-20 (ticks 1-6, idle — no measurement, no code change): six ticks with no direction on
 `--bake`. Item (a) in the brief is stale — the UX block has shipped as `_UX_JS` since

@@ -439,6 +439,64 @@ def _ux_block(html: str) -> str:
     return html[start:html.index("</script>", start)]
 
 
+def test_every_community_gets_a_row_in_the_families_panel(tmp_path):
+    """The panel used to be built from the community *labels*, so a graph without labels
+    got an empty list and there was no way to filter by family at all."""
+    html, _ = _render(tmp_path, 120, 25)
+    m = re.search(r"const LEGEND = (\[.*?\]);", html, re.S)
+    assert m, "the page must carry the family list"
+    legend = m.group(1)
+    assert legend.count('"cid"') == 5, legend[:200]
+    assert '"count"' in legend and '"label"' in legend
+    # a family without a label is named after the file most of its members come from
+    assert '"colourIndex"' in legend
+
+
+def test_families_panel_filters_and_isolates(tmp_path):
+    """The user asked for filtering by family and by colour; the panel is the answer."""
+    html, _ = _render(tmp_path, 900, 3)
+    assert 'id="family-filter"' in html
+    assert 'id="colour-strip"' in html
+    assert "function isolateCommunity(cid)" in html
+    assert "function showColour(index)" in html
+    assert "function visibleFamilies()" in html
+    assert "familyFilterEl.addEventListener('input', renderFamilies);" in html
+    # a bulk change is spread over frames instead of blocking the main thread once
+    assert "const perFrame = Math.max(1, Math.ceil(changed.length / 4));" in html
+    assert "requestAnimationFrame(step);" in html
+
+
+def test_filter_only_updates_the_families_that_changed(tmp_path):
+    """A DataSet update for 1886 nodes measured 149.6 ms, and 'show all' used to pay it
+    even when nothing was hidden."""
+    html, _ = _render(tmp_path, 900, 3)
+    assert "function applyHidden(next)" in html
+    assert "for (const cid of next) if (!appliedHidden.has(cid)) changed.push(cid);" in html
+    assert "if (!changed.length)" in html
+
+
+def test_neighbouring_communities_never_share_a_colour(tmp_path):
+    """With 141 communities and 10 colours, cid % 10 put 20 of the 226 adjacent community
+    pairs on the same colour, so two neighbouring clusters read as one. A greedy colouring
+    of the community adjacency graph brings that to 0."""
+    import networkx as _nx
+    from graphify.exporters.html import _community_color_map
+
+    G = _nx.Graph()
+    comm = {}
+    for i in range(60):
+        cid = i % 12
+        comm[f"n{i}"] = cid
+        G.add_node(f"n{i}", community=cid)
+    # a chain of communities, each linked to the next
+    for i in range(60 - 1):
+        G.add_edge(f"n{i}", f"n{i + 1}")
+    mapping = _community_color_map(G, comm, 10)
+    assert len(mapping) == 12
+    for i in range(11):
+        assert mapping[i] != mapping[i + 1], mapping
+
+
 def test_light_palette_is_readable_on_white():
     """The dark palette was designed for a dark background: on white, five of its ten
     colours fall below the 3:1 contrast ratio (yellow #EDC948 is 1.61:1) and half the

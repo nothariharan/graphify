@@ -1,10 +1,10 @@
 // L25 — dump the layout a build actually produces, so the metrics kernel can score it.
 //
-//   node harness/l25_dump.mjs --file variants/base-ours-v13.html --out results/l25-rsl-browser.json
+//   node harness/l27_dump.mjs --file variants/base-ours-v13.html --out results/l27-rsl-browser.json
 //
 // Fresh browser context every run => empty localStorage => the solver runs, so the dump is
 // the 200-iteration layout the user sees on a first open, not a cached one.
-// The dump is the input for harness/l25_metrics.py (one kernel, so browser and numpy layouts
+// The dump is the input for harness/l27_metrics.py (one kernel, so browser and numpy layouts
 // are scored by exactly the same code for exactly the same graph).
 import { chromium } from 'playwright-core';
 import http from 'node:http';
@@ -57,6 +57,9 @@ const dump = await page.evaluate(() => {
   const nodes = RAW_NODES.map((n) => ({
     id: n.id, label: n.label, community: n.community, degree: n.degree,
     size: n.size, font: n.font && n.font.size,
+    colour: (network.body.nodes[n.id] && network.body.nodes[n.id].options &&
+             network.body.nodes[n.id].options.color &&
+             network.body.nodes[n.id].options.color.background) || null,
   }));
   const edges = edgesDS.get().map((e) => [e.from, e.to]);
   const positions = {};
