@@ -36,7 +36,7 @@ from graphify.exporters.html import (
     LEAN_GESTURE_NODE_THRESHOLD,
     to_html,
 )
-from graphify.exporters.base import COMMUNITY_COLORS, COMMUNITY_COLORS_LIGHT
+from graphify.exporters.base import COMMUNITY_COLORS
 
 
 def _relative_luminance(hex_color: str) -> float:
@@ -497,28 +497,18 @@ def test_neighbouring_communities_never_share_a_colour(tmp_path):
         assert mapping[i] != mapping[i + 1], mapping
 
 
-def test_light_palette_is_readable_on_white():
-    """The dark palette was designed for a dark background: on white, five of its ten
-    colours fall below the 3:1 contrast ratio (yellow #EDC948 is 1.61:1) and half the
-    communities disappear into the page. The light palette keeps the hues and clears
-    4.5:1 on white - and still clears 3:1 on the dark background."""
-    assert len(COMMUNITY_COLORS_LIGHT) == len(COMMUNITY_COLORS)
-    for c in COMMUNITY_COLORS_LIGHT:
-        assert _contrast(c, "#ffffff") >= 4.5, c
-        assert _contrast(c, "#0f0f1a") >= 3.0, c
-    # the dark palette is the one that fails on white - that is why there are two
-    assert min(_contrast(c, "#ffffff") for c in COMMUNITY_COLORS) < 3.0
+def test_community_palette_is_the_same_in_both_themes(tmp_path):
+    """A darkened light-theme palette was tried and rejected: on white the original
+    colours are the ones that look right (the user's call). What differs per theme is the
+    edge colour, the selection ring and the dimming amount, not the nodes."""
+    from graphify.exporters.base import COMMUNITY_COLORS
 
-
-def test_both_palettes_and_the_theme_tokens_go_into_the_page(tmp_path):
-    """The theme is not only CSS: the community colours, the edge colour, the selection
-    ring and the dimming amount are drawn into the canvas, so the page needs both
-    palettes and the per-theme values."""
     html, _ = _render(tmp_path, 900, 3)
-    for c in COMMUNITY_COLORS + COMMUNITY_COLORS_LIGHT:
+    for c in COMMUNITY_COLORS:
         assert '"%s"' % c in html
-    assert "const PAL_DARK = [" in html
-    assert "const PAL_LIGHT = [" in html
+    assert "const PALETTE = [" in html
+    assert "PAL_LIGHT" not in html
+    # the per-theme values are still there
     assert "--dim: 0.55" in html and "--dim: 0.42" in html
     assert "--node-ring: #ffffff" in html and "--node-ring: #1f2430" in html
     assert "--edge-opacity: 0.7" in html and "--edge-opacity: 0.92" in html

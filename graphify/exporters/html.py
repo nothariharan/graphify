@@ -1,7 +1,7 @@
 """html — moved verbatim from graphify/export.py."""
 from __future__ import annotations
 
-from graphify.exporters.base import COMMUNITY_COLORS, COMMUNITY_COLORS_LIGHT  # noqa: E402,F401
+from graphify.exporters.base import COMMUNITY_COLORS  # noqa: E402,F401
 from pathlib import Path
 import html as _html
 from graphify.analyze import _node_community_map
@@ -14,11 +14,9 @@ from graphify.security import sanitize_label
 MAX_NODES_FOR_VIZ = 5_000
 _HTML_STALE_MARKER = ".graph.html.stale"
 
-# Both community palettes go into the page: the theme switch re-tints the canvas, and the
-# dark palette is not readable on a white background (five of its ten colours are below
-# the 3:1 contrast ratio there).
+# The community palette goes into the page so the theme switch can re-tint the canvas and
+# so the legend, the search swatches and the neighbour links all read the same source.
 _PAL_JS = "[" + ", ".join('"%s"' % c for c in COMMUNITY_COLORS) + "]"
-_PAL_LIGHT_JS = "[" + ", ".join('"%s"' % c for c in COMMUNITY_COLORS_LIGHT) + "]"
 
 # Dense graphs spend most of every canvas redraw on per-edge arrowheads. Above
 # this many edges the exporter stops drawing an arrowhead on every edge every
@@ -945,26 +943,23 @@ const network = new vis.Network(container, {{ nodes: nodesDS, edges: edgesDS }},
 
 // Theme toggle (#3894): Light / Dark / System, persisted in localStorage.
 //
-// The theme is not only CSS: the community palette, the edge colour, the selection ring
-// and the dimming amount are all drawn into the canvas, so they have to follow the theme
-// too. The dark palette was designed for a dark background - on white, five of its ten
-// colours fall below 3:1 contrast and the communities disappear - so the light theme uses
-// COMMUNITY_COLORS_LIGHT (the same hues, darkened).
+// The theme is not only CSS: the edge colour, the selection ring and the dimming amount
+// are drawn into the canvas, so they have to follow the theme too. The community palette
+// is deliberately the SAME in both themes - a darkened light-theme variant was tried and
+// the original colours are the ones that look right on white (the user's call).
 const THEME_KEY = 'graphify-theme';
 const themeMQ = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
-const PAL_DARK = {_PAL_JS};
-const PAL_LIGHT = {_PAL_LIGHT_JS};
+const PALETTE = {_PAL_JS};
 // The palette index of every community (see _community_color_map): neighbouring
 // communities never share a colour, so two adjacent clusters never read as one.
 const COMMUNITY_COLOUR = {community_colour_json};
 let themeIsLight = false;
 function palByIndex(i) {{
-  const pal = themeIsLight ? PAL_LIGHT : PAL_DARK;
-  return pal[((i % pal.length) + pal.length) % pal.length];
+  return PALETTE[((i % PALETTE.length) + PALETTE.length) % PALETTE.length];
 }}
 function palColor(cid) {{
   let i = (cid === undefined || cid === null) ? 0 : COMMUNITY_COLOUR[cid];
-  if (i === undefined || i === null) i = cid % (themeIsLight ? PAL_LIGHT.length : PAL_DARK.length);
+  if (i === undefined || i === null) i = cid % PALETTE.length;
   return palByIndex(i);
 }}
 function themePref() {{

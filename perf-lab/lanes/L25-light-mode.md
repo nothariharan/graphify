@@ -77,6 +77,25 @@ Tests: 40/40 in `tests/test_html_perf_levers.py`, including a guard that compute
 contrast of every palette entry, so a future palette change cannot silently make the light
 theme unreadable again.
 
+
+
+## Reversed: the palette stays the original (the user's call)
+
+The darkened light-theme palette was measured, shipped, and then rejected on sight: on white
+the original colours are the ones that read right, even though five of them are below the
+3:1 threshold (a 1-2 px dot at 1.6:1 is still a dot you can see; a darkened dot is a dot you
+do not want to look at). The palette is now **one palette for both themes** again, and what
+stays theme-specific is everything that was actually broken on white:
+
+- the edge colour and opacity (--edge-color, --edge-opacity: 0.7 dark, 0.92 light),
+- the selection/focus ring (--node-ring: white on dark, #1f2430 on light - it used to be
+  white on white),
+- the dimming amount (--dim: 0.55 dark, 0.42 light),
+- and the retint machinery, which still restores the palette after a data change and keeps
+  the legend, the search swatches and the neighbour links on the same palette.
+
+shots/light-v16.png is the picture: the original bright palette on white, with the panel.
+
 ## Verdict
 
 Ship it. The light theme was never a theme, it was the dark theme's colours on a white

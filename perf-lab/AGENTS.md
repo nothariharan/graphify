@@ -42,11 +42,11 @@ behave worse is a regression.
 7. **Never `--use-gl=swiftshader`** for a WebGL measurement, and never treat a single run's
    absolute fps as a result (§4).
 
-## 3. Where things stand (shipped in the exporter, working tree `37da301b`)
+## 3. Where things stand (shipped in the exporter, working tree `38e92871`)
 
-`graphify/exporters/html.py` — sha256 `37da301b43ebb7e99490c311bd9e2f7a71b805df3c529695730dcf8ae287d26e`
+`graphify/exporters/html.py` — sha256 `38e9287169a6fb617e638ffc4335dfeec1ff3743a0799e50aa0f44d8dede93fc`
 (uncommitted at the time of writing; the last commit that touched it is `716c421e`).
-`graphify/exporters/base.py` — sha256 `1d4bebfc4c868767eed97a8f35b3021e85add9bb712070501ca89166fd5fc242`
+`graphify/exporters/base.py` — sha256 `9c2be12740855a38bdfc2b1b727b2bea494cdb26b1640a61626bada67282b3a8`
 (the two community palettes).
 
 | lever | what it does | gate |
@@ -63,7 +63,7 @@ behave worse is a regression.
 | click focus (L24) | the same picture, made sticky: click a node and everything not connected to it dims down until you click away (empty space, the same node, or Escape). The hover focus is suppressed while it is active, so moving the pointer cannot wipe it | same gate as the lean |
 | colour-preserving selection (L13) | highlight/hover keep the community fill and add a white border ring; no `#ffffff` fill anywhere | always |
 | frame HUD (L13) | fps + frame ms, toggled with `H`, textContent only | same gate as the lean |
-| light theme (L25) | the palette, the edge colour, the selection ring and the dimming amount all follow the theme: five of the dark palette's ten colours are below 3:1 contrast on white, and a white selection ring on white is invisible | always |
+| light theme (L25) | the community palette is the SAME in both themes (a darkened light variant was tried and rejected by the user); what follows the theme is the edge colour/opacity (0.7 dark, 0.92 light), the selection ring (white was invisible on white) and the dimming amount (0.55 / 0.42) | always |
 | adjacency-aware community colours (L27) | the palette is assigned to the communities by a greedy colouring of the community adjacency graph, so two families that share an edge never share a colour (20 of 226 adjacent pairs collided before, 0 now) | always |
 | families panel (L28) | every community is a row (colour, name, size), a filter box narrows the list, clicking a name shows that family alone, a colour strip shows one colour's families, and a bulk change is spread over four frames | always |
 
@@ -72,11 +72,11 @@ HEAD build): **node drag 40.4 → 82.9 fps (x2.05), pan 39.1 → 78.9 (x2.02), z
 (x5.29)**, stalled frames (>33 ms) 13/14/91 per 90 → 1/1/0. Across all certified runs of this
 lever the paired ratio spans **x1.7–x5.8**.
 
-Shipped artifact: `variants/base-ours-v15.html` (2006876 bytes, sha256
-`eec347a0dc80328d99151b5b30105bd3fe34d2d2ce92ac71a1a4096ad9fad0e3`). Regenerate it
+Shipped artifact: `variants/base-ours-v16.html` (2006609 bytes, sha256
+`31ec4a774a11de35f8e02f8f63d3c05ae1d03e1d19f1b0cb21aa572bba1f2c9e`). Regenerate it
 from the working tree with:
 ```powershell
-python harness/build_base.py --graph-json ../worked/rsl-siege-manager/graph.json --name ours-v15
+python harness/build_base.py --graph-json ../worked/rsl-siege-manager/graph.json --name ours-v16
 ```
 If your regenerated artifact's exporter-block hash differs from the above, the exporter moved:
 say so in `LOG.md`, and re-measure before quoting any number in this file.
@@ -344,8 +344,8 @@ hypothesis in it *before* you measure.
 
 1. Read this file, `STATE.md` tick status, the last 20 lines of `LOG.md`, the tail of `DECISIONS.tsv`.
 2. `python harness/bench_lock.py status`.
-3. Confirm the shipped artifact is current: rebuild `base-ours-v15.html` and compare the
+3. Confirm the shipped artifact is current: rebuild `base-ours-v16.html` and compare the
    exporter block against the hash above.
-4. `python -m pytest tests/test_html_perf_levers.py -q` (from the repo root) - 44 tests, all
+4. `python -m pytest tests/test_html_perf_levers.py -q` (from the repo root) - 43 tests, all
    green, before you change anything.
 5. Pick a lane from §6 or the next `STATE.md` item, write the lane doc, then measure.

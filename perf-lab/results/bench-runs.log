@@ -168,3 +168,8 @@
 2026-10-22 09:20:17+0530	8.4s	exit=0	L28: smoke the v15 view	node harness/smoke_view.mjs --file view/after.html
 2026-10-22 09:26:32+0530	326.6s	exit=0	final certification: official v8 vs the shipped v15 (5 rounds)	node harness/ab_drag.mjs --variants official=variants/base-official-v8.html,v15=variants/base-ours-v15.html --rounds 5 --gestures node,pan,zoom --steps 90 --out results/ab-rsl-official-v15.csv
 2026-10-22 09:29:32+0530	166.8s	exit=0	final certification: rest + hover, official vs v15	node harness/ab_rest.mjs --variants official=variants/base-official-v8.html,v15=variants/base-ours-v15.html --rounds 3 --frames 40 --out results/ab-rest-official-v15.csv
+2026-10-22 09:30:49+0530	10.9s	exit=0	final: light theme + families panel together	node harness/shot_page.mjs --file variants/base-ours-v15.html --out shots/final-light.png --theme light
+2026-10-22 12:18:25+0530	15.5s	exit=0	light mode: the original palette back on white	node harness/shot_page.mjs --file variants/base-ours-v16.html --out shots/light-v16.png --theme light
+2026-10-22 12:19:14+0530	16.5s	exit=0	light mode: click focus + ring with the original palette	node harness/probe_click_focus.mjs --file variants/base-ours-v16.html --theme light
+2026-10-22 12:19:42+0530	28.2s	exit=0	v16 capability probe	node harness/probe_capabilities.mjs --file variants/base-ours-v16.html
+2026-10-22 12:23:18+0530	12.9s	exit=0	v16: smoke the view	node harness/smoke_view.mjs --file view/after.html
