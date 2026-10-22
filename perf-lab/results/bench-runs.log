@@ -144,3 +144,14 @@
 2026-10-21 22:23:31+0530	15.1s	exit=0	L24: the same probe on the official build	node harness/probe_reopen.mjs --file variants/base-official-v8.html --runs 3
 2026-10-21 22:24:59+0530	5.7s	exit=0	L24: smoke the shipped view (v13)	node harness/smoke_view.mjs --file view/after.html
 2026-10-21 22:25:24+0530	5.4s	exit=0	L24: smoke the shipped view (v13)	node harness/smoke_view.mjs --file view/after.html
+2026-10-22 08:45:01+0530	13.0s	exit=0	light mode: how does the graph actually look on a white background?	node harness/shot_page.mjs --file variants/base-ours-v13.html --out shots/light-v13.png --theme light
+2026-10-22 08:47:43+0530	11.8s	exit=0	L25 baseline: rsl 200-iteration layout quality, canonical probe_layout	node harness/probe_layout.mjs --file variants/base-ours-v13.html --shot shots/l25-rsl-baseline.png
+2026-10-22 08:47:57+0530	12.5s	exit=0	L25 starting point: re-run the L22 frame split on the shipped v13 artifact	node harness/probe_frame_parts.mjs --file variants/base-ours-v13.html --frames 14
+2026-10-22 08:48:15+0530	10.8s	exit=0	L25 dump: rsl stabilized positions + node meta for the metrics kernel	node harness/l25_dump.mjs --file variants/base-ours-v13.html --out results/l25-rsl-browser.json
+2026-10-22 08:52:34+0530	14.4s	exit=0	light mode: the fixed palette	node harness/shot_page.mjs --file variants/base-ours-v14.html --out shots/light-v14.png --theme light
+2026-10-22 08:52:55+0530	21.0s	exit=0	light mode: dark theme unchanged?	node harness/shot_page.mjs --file variants/base-ours-v14.html --out shots/dark-v14.png --theme dark
+2026-10-22 08:53:44+0530	11.6s	exit=0	light mode: what colour are the edges drawn with?	node harness/probe_edge_color.mjs --file variants/base-ours-v14.html --theme light
+2026-10-22 08:55:03+0530	12.3s	exit=0	light mode: edges readable?	node harness/shot_page.mjs --file variants/base-ours-v14.html --out shots/light-v14b.png --theme light
+2026-10-22 08:55:48+0530	17.5s	exit=0	light mode: the click focus (dimming + ring) on white	node harness/probe_click_focus.mjs --file variants/base-ours-v14.html --theme light --shot shots/light-v14-focus.png
+2026-10-22 08:57:48+0530	9.0s	exit=0	L25: smoke the view with the light theme	node harness/smoke_view.mjs --file view/after.html
+2026-10-22 08:58:14+0530	10.5s	exit=0	L25: smoke the v14 view	node harness/smoke_view.mjs --file view/after.html

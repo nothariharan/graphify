@@ -1,7 +1,7 @@
 """html — moved verbatim from graphify/export.py."""
 from __future__ import annotations
 
-from graphify.exporters.base import COMMUNITY_COLORS  # noqa: E402,F401
+from graphify.exporters.base import COMMUNITY_COLORS, COMMUNITY_COLORS_LIGHT  # noqa: E402,F401
 from pathlib import Path
 import html as _html
 from graphify.analyze import _node_community_map
@@ -13,6 +13,12 @@ from graphify.security import sanitize_label
 
 MAX_NODES_FOR_VIZ = 5_000
 _HTML_STALE_MARKER = ".graph.html.stale"
+
+# Both community palettes go into the page: the theme switch re-tints the canvas, and the
+# dark palette is not readable on a white background (five of its ten colours are below
+# the 3:1 contrast ratio there).
+_PAL_JS = "[" + ", ".join('"%s"' % c for c in COMMUNITY_COLORS) + "]"
+_PAL_LIGHT_JS = "[" + ", ".join('"%s"' % c for c in COMMUNITY_COLORS_LIGHT) + "]"
 
 # Dense graphs spend most of every canvas redraw on per-edge arrowheads. Above
 # this many edges the exporter stops drawing an arrowhead on every edge every
@@ -439,11 +445,13 @@ def _html_styles() -> str:
     --bg: #0f0f1a; --panel: #1a1a2e; --border: #2a2a4e; --input-border: #3a3a5e;
     --text: #e0e0e0; --text-2: #aaa; --text-3: #ccc; --muted: #555; --count: #666;
     --neighbor-border: #333; --node-label: #ffffff;
+    --dim: 0.55; --node-ring: #ffffff; --edge-color: #848484; --edge-opacity: 0.7;
   }
   [data-theme="light"] {
     --bg: #ffffff; --panel: #f8f9fa; --border: #d9dee5; --input-border: #c3cad4;
     --text: #222222; --text-2: #666666; --text-3: #333333; --muted: #888888; --count: #777777;
     --neighbor-border: #ccc; --node-label: #222222;
+    --dim: 0.42; --node-ring: #1f2430; --edge-color: #5b5b66; --edge-opacity: 0.92;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; display: flex; height: 100vh; overflow: hidden; }
@@ -662,16 +670,39 @@ _UX_JS = """
   }
   var nodesObj = network.body.nodes;
   var orig = new Map(), dimCache = new Map();
-  for (var oid in nodesObj) {
-    var oc = nodesObj[oid] && nodesObj[oid].options && nodesObj[oid].options.color;
-    if (oc && typeof oc === 'object' && oc.background) {
-      orig.set(oid, { bg: oc.background, bd: oc.border || oc.background });
+  function captureBase() {
+    orig = new Map(); dimCache = new Map();
+    for (var oid in nodesObj) {
+      var oc = nodesObj[oid] && nodesObj[oid].options && nodesObj[oid].options.color;
+      if (oc && typeof oc === 'object' && oc.background) {
+        orig.set(oid, { bg: oc.background, bd: oc.border || oc.background });
+      }
     }
   }
+  captureBase();
+  // A theme change moves the base colours: re-capture them and repaint the focus, or the
+  // focus would restore the old palette when it is dismissed.
+  document.addEventListener('graphify-theme', function () {
+    captureBase();
+    if (clickOn) paint(clickKeep);
+    else if (hoverOn && hoverKeep) paint(hoverKeep);
+    else paint(null);
+  });
   function dimOf(hex) {
     var d = dimCache.get(hex);
-    if (!d) { d = mix(hex, 0.55); dimCache.set(hex, d); }
+    if (!d) { d = mix(hex, dimAmount()); dimCache.set(hex, d); }
     return d;
+  }
+  // How far the dimmed nodes are blended toward the background. The background is very
+  // dark in the dark theme and very light in the light one, so the same 0.55 buries a
+  // node on white and leaves it loud on black: the theme decides.
+  function dimAmount() {
+    var v = 0.55;
+    try {
+      var raw = getComputedStyle(document.documentElement).getPropertyValue('--dim').trim();
+      if (raw) { var n = parseFloat(raw); if (isFinite(n) && n > 0 && n < 1) v = n; }
+    } catch (e) {}
+    return v;
   }
   var hoverTimer = 0, hoverOn = false, hoverKeep = null;
   // Click focus (#perf L24): the node you clicked and the nodes connected to it keep
@@ -872,27 +903,115 @@ const network = new vis.Network(container, {{ nodes: nodesDS, edges: edgesDS }},
 {lean_js}
 
 // Theme toggle (#3894): Light / Dark / System, persisted in localStorage.
+//
+// The theme is not only CSS: the community palette, the edge colour, the selection ring
+// and the dimming amount are all drawn into the canvas, so they have to follow the theme
+// too. The dark palette was designed for a dark background - on white, five of its ten
+// colours fall below 3:1 contrast and the communities disappear - so the light theme uses
+// COMMUNITY_COLORS_LIGHT (the same hues, darkened).
 const THEME_KEY = 'graphify-theme';
 const themeMQ = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
-let themeLabelColor = '#ffffff';  // matches the per-node font color set in Python
+const PAL_DARK = {_PAL_JS};
+const PAL_LIGHT = {_PAL_LIGHT_JS};
+let themeIsLight = false;
+function palColor(cid) {{
+  const pal = themeIsLight ? PAL_LIGHT : PAL_DARK;
+  const i = (cid === undefined || cid === null) ? 0 : (cid % pal.length + pal.length) % pal.length;
+  return pal[i];
+}}
 function themePref() {{
   let p = null;
   try {{ p = localStorage.getItem(THEME_KEY); }} catch (e) {{}}
   return (p === 'light' || p === 'dark' || p === 'system') ? p : null;
 }}
+function themeTokens() {{
+  const cs = getComputedStyle(document.documentElement);
+  const op = parseFloat((cs.getPropertyValue('--edge-opacity') || '').trim());
+  return {{
+    ring: (cs.getPropertyValue('--node-ring') || '').trim() || (themeIsLight ? '#1f2430' : '#ffffff'),
+    edge: (cs.getPropertyValue('--edge-color') || '').trim() || (themeIsLight ? '#5b5b66' : '#848484'),
+    edgeOpacity: (isFinite(op) && op > 0 && op <= 1) ? op : 0.7,
+    label: (cs.getPropertyValue('--node-label') || '').trim() || '#ffffff',
+  }};
+}}
+// Re-colour what is drawn into the canvas. Instance writes, never a DataSet update:
+// one update for 1886 nodes measured 149.6 ms, and a theme switch has to feel instant.
+function retint() {{
+  const tk = themeTokens();
+  let community = null;
+  try {{
+    community = {{}};
+    nodesDS.get().forEach(n => {{ community[n.id] = n.community; }});
+  }} catch (e) {{ community = null; }}
+  const nodes = network.body && network.body.nodes;
+  if (nodes) {{
+    for (const id in nodes) {{
+      const n = nodes[id];
+      if (!n || !n.options) continue;
+      const c = n.options.color;
+      if (!c || typeof c !== 'object') continue;
+      const cid = community ? community[id] : undefined;
+      if (cid === undefined || cid === null) continue;   // unknown node: leave it alone
+      const col = palColor(cid);
+      c.background = col;
+      c.border = col;
+      if (!c.highlight) c.highlight = {{}};
+      c.highlight.background = col; c.highlight.border = tk.ring;
+      if (!c.hover) c.hover = {{}};
+      c.hover.background = col; c.hover.border = tk.ring;
+      if (n.options.font) n.options.font.color = tk.label;
+    }}
+  }}
+  // The edges: vis's default grey vanishes on a white background, and at 0.7 opacity
+  // over white the inherited community colour washes out as well - so the edge colour and
+  // its opacity are theme values.
+  const edges = network.body && network.body.edges;
+  if (edges) {{
+    for (const id in edges) {{
+      const e = edges[id];
+      if (!e || !e.options) continue;
+      const oc = e.options.color;
+      const op = (oc && typeof oc === 'object' && oc.opacity !== undefined) ? oc.opacity : 0.7;
+      e.options.color = {{ color: tk.edge, opacity: themeIsLight ? tk.edgeOpacity : op }};
+    }}
+    try {{ if (typeof _EDGE_BATCH !== 'undefined' && _EDGE_BATCH.dirty) _EDGE_BATCH.dirty(); }} catch (e) {{}}
+  }}
+  // The legend swatches follow the palette.
+  const items = document.querySelectorAll('.legend-item');
+  for (let i = 0; i < items.length; i++) {{
+    const dot = items[i].querySelector('.legend-dot');
+    const cid = LEGEND[i] && LEGEND[i].cid;
+    if (dot && cid !== undefined && cid !== null) dot.style.background = palColor(cid);
+  }}
+  // The focus block owns the dimmed colours; tell it the base colours moved.
+  try {{ document.dispatchEvent(new CustomEvent('graphify-theme')); }} catch (e) {{}}
+  try {{ network.redraw(); }} catch (e) {{}}
+}}
+// A data change (the legend filter) re-resolves the node instances from the DataSet,
+// which would put the dark palette back on a light theme: re-tint after every change.
+try {{
+  nodesDS.on('*', function () {{ retint(); }});
+}} catch (e) {{}}
 function applyTheme(pref) {{
   const t = pref === 'light' ? 'light' : (pref === 'system' && themeMQ && themeMQ.matches) ? 'light' : 'dark';
   const root = document.documentElement;
   if (!root) return;
+  themeIsLight = (t === 'light');
   root.setAttribute('data-theme', t);
   document.querySelectorAll('[data-theme-choice]').forEach(b => {{
     b.setAttribute('aria-pressed', String(b.dataset.themeChoice === (pref || 'dark')));
   }});
-  const labelColor = getComputedStyle(root).getPropertyValue('--node-label').trim();
-  if (labelColor && labelColor !== themeLabelColor) {{
-    themeLabelColor = labelColor;
-    nodesDS.update(nodesDS.get().map(n => ({{ id: n.id, font: Object.assign({{}}, n.font, {{ color: labelColor }}) }})));
+  // The label colour is drawn by vis's label module, which only picks it up from a
+  // DataSet update - so the labelled nodes (the high-degree ones, a few hundred) are
+  // updated, not all 1886.
+  const labelColor = themeTokens().label;
+  if (labelColor) {{
+    const labelled = nodesDS.get().filter(n => n.font && n.font.size);
+    if (labelled.length) {{
+      nodesDS.update(labelled.map(n => ({{ id: n.id, font: Object.assign({{}}, n.font, {{ color: labelColor }}) }})));
+    }}
   }}
+  retint();
 }}
 document.querySelectorAll('[data-theme-choice]').forEach(b => {{
   b.addEventListener('click', () => {{
@@ -918,7 +1037,7 @@ function showInfo(nodeId) {{
   const neighborIds = network.getConnectedNodes(nodeId);
   const neighborItems = neighborIds.map(nid => {{
     const nb = nodesDS.get(nid);
-    const color = nb ? nb.color.background : '#555';
+    const color = nb ? palColor(nb.community) : '#555';
     return `<span class="neighbor-link" style="border-left-color:${{esc(color)}}" data-nid="${{esc(nid)}}">${{esc(nb ? nb.label : nid)}}</span>`;
   }}).join('');
   const isMetaNode = !n.file_type && !n.source_file;
@@ -1041,7 +1160,7 @@ searchInput.addEventListener('input', () => {{
     const el = document.createElement('div');
     el.className = 'search-item';
     el.textContent = n.label;
-    el.style.borderLeft = `3px solid ${{n.color.background}}`;
+    el.style.borderLeft = `3px solid ${{palColor(n.community)}}`;
     el.style.paddingLeft = '8px';
     el.onclick = () => {{
       network.focus(n.id, {{ scale: 1.5, animation: true }});
@@ -1107,7 +1226,7 @@ LEGEND.forEach(c => {{
     nodesDS.update(updates);
     updateSelectAllState();
   }});
-  item.innerHTML = `<div class="legend-dot" style="background:${{c.color}}"></div>
+  item.innerHTML = `<div class="legend-dot" style="background:${{palColor(c.cid)}}"></div>
     <span class="legend-label">${{c.label}}</span>
     <span class="legend-count">${{c.count}}</span>`;
   item.prepend(cb);

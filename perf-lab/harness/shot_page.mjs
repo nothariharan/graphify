@@ -26,7 +26,13 @@ const srv = http.createServer((req, res) => {
 });
 await new Promise((r) => srv.listen(8270, '127.0.0.1', r));
 const browser = await chromium.launch({ executablePath: CHROME, headless: true });
-const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+const THEME = arg('theme', '');
+if (THEME) {
+  // the theme is read from localStorage on load, so it has to be there before the page runs
+  await ctx.addInitScript((t) => { try { localStorage.setItem('graphify-theme', t); } catch (e) {} }, THEME);
+}
+const page = await ctx.newPage();
 await page.goto('http://127.0.0.1:8270/' + FILE.replace(/\\/g, '/'), { waitUntil: 'load', timeout: 180000 });
 await page.waitForFunction(() => {
   try { return network.physics.options.enabled === false; } catch (e) { return false; }

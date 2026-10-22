@@ -36,6 +36,23 @@ from graphify.exporters.html import (
     LEAN_GESTURE_NODE_THRESHOLD,
     to_html,
 )
+from graphify.exporters.base import COMMUNITY_COLORS, COMMUNITY_COLORS_LIGHT
+
+
+def _relative_luminance(hex_color: str) -> float:
+    """WCAG 2.1 relative luminance."""
+    h = hex_color.lstrip("#")
+    if len(h) == 3:
+        h = h[0] * 2 + h[1] * 2 + h[2] * 2
+    r, g, b = (int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    f = lambda c: c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4  # noqa: E731
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
+
+
+def _contrast(a: str, b: str) -> float:
+    la, lb = _relative_luminance(a), _relative_luminance(b)
+    hi, lo = max(la, lb), min(la, lb)
+    return (hi + 0.05) / (lo + 0.05)
 
 
 def _render(tmp_path: Path, n: int, k: int) -> tuple[str, int]:
@@ -420,6 +437,63 @@ def _ux_block(html: str) -> str:
     assertion about this block."""
     start = html.index("interaction feel (#perf L13)")
     return html[start:html.index("</script>", start)]
+
+
+def test_light_palette_is_readable_on_white():
+    """The dark palette was designed for a dark background: on white, five of its ten
+    colours fall below the 3:1 contrast ratio (yellow #EDC948 is 1.61:1) and half the
+    communities disappear into the page. The light palette keeps the hues and clears
+    4.5:1 on white - and still clears 3:1 on the dark background."""
+    assert len(COMMUNITY_COLORS_LIGHT) == len(COMMUNITY_COLORS)
+    for c in COMMUNITY_COLORS_LIGHT:
+        assert _contrast(c, "#ffffff") >= 4.5, c
+        assert _contrast(c, "#0f0f1a") >= 3.0, c
+    # the dark palette is the one that fails on white - that is why there are two
+    assert min(_contrast(c, "#ffffff") for c in COMMUNITY_COLORS) < 3.0
+
+
+def test_both_palettes_and_the_theme_tokens_go_into_the_page(tmp_path):
+    """The theme is not only CSS: the community colours, the edge colour, the selection
+    ring and the dimming amount are drawn into the canvas, so the page needs both
+    palettes and the per-theme values."""
+    html, _ = _render(tmp_path, 900, 3)
+    for c in COMMUNITY_COLORS + COMMUNITY_COLORS_LIGHT:
+        assert '"%s"' % c in html
+    assert "const PAL_DARK = [" in html
+    assert "const PAL_LIGHT = [" in html
+    assert "--dim: 0.55" in html and "--dim: 0.42" in html
+    assert "--node-ring: #ffffff" in html and "--node-ring: #1f2430" in html
+    assert "--edge-opacity: 0.7" in html and "--edge-opacity: 0.92" in html
+
+
+def test_theme_switch_recolours_the_instances_not_the_dataset(tmp_path):
+    """A theme switch has to feel instant: one DataSet update for 1886 nodes measured
+    149.6 ms, so the colours are written onto the instances and the batch is told to
+    rebuild its groups."""
+    html, _ = _render(tmp_path, 900, 3)
+    assert "function retint()" in html
+    assert "c.background = col;" in html
+    assert "c.highlight.border = tk.ring;" in html
+    assert "e.options.color = { color: tk.edge, opacity:" in html
+    assert "_EDGE_BATCH.dirty()" in html
+    # the legend swatches and the search / neighbour colours follow the palette
+    assert "palColor(c.cid)" in html
+    assert "palColor(nb.community)" in html
+    assert "palColor(n.community)" in html
+    # a data change (the legend filter) must not put the dark palette back
+    assert "nodesDS.on('*', function () { retint(); });" in html
+
+
+def test_dimming_follows_the_theme(tmp_path):
+    """55% toward the background buries a node on white and leaves it loud on black, so
+    the blend amount is a theme value."""
+    html, _ = _render(tmp_path, 900, 3)
+    assert "function dimAmount()" in html
+    assert "getPropertyValue('--dim')" in html
+    assert "d = mix(hex, dimAmount());" in html
+    # and the focus block re-captures its base colours when the theme moves them
+    assert "document.addEventListener('graphify-theme', function () {" in html
+    assert "captureBase();" in html
 
 
 def test_click_focus_dims_what_is_not_connected(tmp_path):

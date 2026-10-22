@@ -31,7 +31,12 @@ const srv = http.createServer((req, res) => {
 });
 await new Promise((r) => srv.listen(8275, '127.0.0.1', r));
 const browser = await chromium.launch({ executablePath: CHROME, headless: true });
-const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+const THEME = arg('theme', '');
+if (THEME) {
+  await ctx.addInitScript((t) => { try { localStorage.setItem('graphify-theme', t); } catch (e) {} }, THEME);
+}
+const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e).slice(0, 160)));
 await page.goto('http://127.0.0.1:8275/' + FILE.replace(/\\/g, '/'), { waitUntil: 'load', timeout: 180000 });
