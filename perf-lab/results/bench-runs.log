@@ -173,3 +173,9 @@
 2026-10-22 12:19:14+0530	16.5s	exit=0	light mode: click focus + ring with the original palette	node harness/probe_click_focus.mjs --file variants/base-ours-v16.html --theme light
 2026-10-22 12:19:42+0530	28.2s	exit=0	v16 capability probe	node harness/probe_capabilities.mjs --file variants/base-ours-v16.html
 2026-10-22 12:23:18+0530	12.9s	exit=0	v16: smoke the view	node harness/smoke_view.mjs --file view/after.html
+2026-10-22 12:25:37+0530	8.3s	exit=0	light mode: zoomed in, to compare with the user's before screenshot	node harness/shot_page.mjs --file variants/base-ours-v16.html --out shots/light-v16-zoom.png --theme light --scale 0.55
+2026-10-22 12:34:26+0530	23.3s	exit=0	zoom lag: where does the frame go at fit / 2x / 4x / 8x, centred on the dense core?	node harness/probe_zoom_split.mjs --file variants/base-ours-v16.html
+2026-10-22 12:35:38+0530	24.8s	exit=0	zoom lag: corrected split at fit / 2x / 4x / 8x	node harness/probe_zoom_split.mjs --file variants/base-ours-v16.html
+2026-10-22 12:37:31+0530	29.7s	exit=0	zoom lag: is it the labels at high zoom? fit through the 2.0 clamp	node harness/probe_zoom_split.mjs --file variants/base-ours-v16.html
+2026-10-22 12:38:34+0530	24.7s	exit=0	zoom lag: the frame vs the hover sweep at the dense centre	node harness/probe_zoom_interact.mjs --file variants/base-ours-v16.html
+2026-10-22 12:39:12+0530	24.6s	exit=0	zoom lag: same probe, reversed zoom order (is x8 real or an artifact?)	node harness/probe_zoom_interact.mjs --file variants/base-ours-v16.html
