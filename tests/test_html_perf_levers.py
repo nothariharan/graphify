@@ -156,7 +156,7 @@ def test_hovered_and_selected_nodes_keep_their_white_border(tmp_path):
     """The border of a hovered or selected node is white and therefore visible: it must
     not be dropped with the rest."""
     html, _ = _render(tmp_path, 900, 3)
-    assert "} else if (_nbHover[id] || _nbSel[id]) {" in html
+    assert "if (_nbHover[id] || _nbSel[id]) {" in html
     assert "size = base; bw = _BORDER_FULL;" in html
     for ev in ("hoverNode", "blurNode", "selectNode", "deselectNode"):
         assert "network.on('%s'" % ev in html
@@ -172,15 +172,15 @@ def test_node_disc_follows_the_zoom_but_not_the_solver(tmp_path):
     assert "network.on('stabilizationIterationsDone', function () { _nbApply(true); });" in html
 
 
-def test_lean_shrinks_the_disc_for_the_length_of_a_gesture(tmp_path):
-    """The border is gone for good, so the lean cannot drop it any more - it shrinks the
-    fill instead. A drag measured 33% faster with the small discs than with the full
-    ones, so the lean still earns its place."""
+def test_gestures_do_not_resize_the_disc(tmp_path):
+    """The lean used to shrink the disc for the length of a gesture because the small
+    discs raster faster. That is exactly what made the nodes visibly shrink every time
+    the graph moved or zoomed, so the size is now the same in a gesture as at rest; the
+    lean only suppresses the hover paint."""
     html, _ = _render(tmp_path, 900, 3)
-    assert "if (_lean) {" in html
-    assert "size = base; bw = 0;" in html
-    # and the gesture has to rewrite the nodes when it starts and when it ends
-    assert "try { _nbApply(true); } catch (e) {}" in html
+    block = html.split("function _nbApplyNode")[1].split("function _nbApply")[0]
+    assert "_lean" not in block
+    assert "size = base * 2; bw = 0;" in block
 
 
 def test_dense_graph_leans_the_draw_during_gestures(tmp_path):
@@ -403,15 +403,16 @@ def test_selection_keeps_the_community_colour(tmp_path):
         assert hov_bg == bg
 
 
-def test_large_graph_gets_the_eased_zoom(tmp_path):
-    """vis zooms once per wheel event, so a trackpad fires a full redraw dozens of
-    times a frame. The shipped path accumulates a target scale and approaches it on
-    rAF, holding the world point under the cursor fixed."""
+def test_large_graph_gets_the_frame_coalesced_zoom(tmp_path):
+    """vis zooms once per wheel event, so a trackpad fires a full redraw dozens of times a
+    frame. The shipped path accumulates a target scale and applies it one per animation
+    frame, holding the world point under the cursor fixed. It used to EASE toward the
+    target over ~40 ms, which read as lag next to vis's instant jump, so it lands on the
+    target in the frame it is applied."""
     html, _ = _render(tmp_path, 900, 3)
     assert "targetScale = Math.max(MIN_S, Math.min(MAX_S, targetScale * Math.exp(-e.deltaY * unit)));" in html
-    # the animation is frame-driven and eases toward the target rather than snapping
     assert "raf = requestAnimationFrame(zoomStep);" in html
-    assert "var k = Math.log(targetScale / curScale);" in html
+    assert "var next = targetScale;" in html
     assert "network.moveTo({" in html
     # vis's own wheel handler must never also see the event, or every delta redraws
     assert "{ passive: false, capture: true }" in html
@@ -595,7 +596,9 @@ def test_zoom_is_clamped_around_the_fit(tmp_path):
     the fit on first use, because a baked build fits after this script runs."""
     html, _ = _render(tmp_path, 900, 3)
     assert "MIN_S = Math.max(0.004, fitScale / 6);" in html
-    assert "MAX_S = Math.max(0.4, Math.min(2.0, fitScale * 12));" in html
+    # vis's own wheel handler clamps to [1e-5, 10]; the old fit*12 ceiling was ~1.0 on
+    # rsl, a tenth of what the shipped viewer allows
+    assert "MAX_S = 10;" in html
     assert "if (fitScale === null) {" in html
 
 

@@ -373,12 +373,7 @@ function _nbApplyNode(id, scale, force) {
   let base = _nbBase[id];
   if (base === undefined) _nbBase[id] = base = n.options.size;
   let size, bw;
-  if (_lean) {
-    // During a gesture the disc is drawn at the fill radius only: the border is not there
-    // to grow it any more, so the lean has to shrink the fill instead. Same look as the old
-    // borderless lean, and measurably cheaper (a drag is 33% faster with the small discs).
-    size = base; bw = 0;
-  } else if (_nbHover[id] || _nbSel[id]) {
+  if (_nbHover[id] || _nbSel[id]) {
     // hovered/selected: the border is white and visible, so keep a real one
     size = base; bw = _BORDER_FULL;
   } else if (_BORDER_FULL / (scale || 1) < base) {
@@ -388,6 +383,10 @@ function _nbApplyNode(id, scale, force) {
     // the border would be capped at the node's width: draw the disc as one fill
     size = base * 2; bw = 0;
   }
+  // The lean used to shrink the disc for the length of a gesture (the small discs raster
+  // faster). That is exactly what made the nodes visibly shrink every time the graph moved
+  // or zoomed, so the size is the same in a gesture as at rest. The lean still suppresses
+  // the hover paint, which is all it should have been doing here.
   if (!force && n.__nbSize === size && n.__nbBw === bw) return;
   n.__nbSize = size;
   n.__nbBw = bw;
@@ -656,7 +655,11 @@ _UX_JS = """
   // network.moveTo(..., {animation:false}) does NOT emit zoom/pan in vis 9.1.6
   // (measured: 2 moveTo calls -> 0 zoom, 0 pan), so the lean is driven here
   // explicitly rather than by the 'zoom' handler.
-  var fitScale = null, MIN_S = 0.004, MAX_S = 2.0;
+  // vis's own wheel handler clamps the scale to [1e-5, 10] (zoom(), in the pinned bundle).
+  // We clamped the zoomed-in end to fit*12, which on rsl is ~1.0 - a tenth of what the
+  // shipped viewer allows, and the user hit it. Match vis: the ceiling is 10, and only the
+  // zoomed-out end keeps a sane floor (fit/6) so the graph cannot be lost in the distance.
+  var fitScale = null, MIN_S = 0.004, MAX_S = 10;
   var targetScale = null, curScale = null, anchor = null, raf = 0, animating = false;
 
   function viewCenter() {
@@ -667,8 +670,11 @@ _UX_JS = """
     raf = 0;
     if (targetScale === null || !anchor) { animating = false; lean(false, true); return; }
     var c = viewCenter();
-    var k = Math.log(targetScale / curScale);
-    var next = Math.abs(k) < 0.0025 ? targetScale : Math.exp(Math.log(curScale) + k * 0.25);
+    // Land on the target the wheel asked for, in this frame. The earlier version eased
+    // toward it (k * 0.25 per frame, ~40 ms of trail), which reads as lag next to vis's
+    // instant per-event jump. The coalescing is what the easing was protecting against -
+    // one moveTo and one redraw per animation frame, however many wheel events arrive.
+    var next = targetScale;
     // world point currently under the cursor; hold it there while the scale changes
     var wp = network.DOMtoCanvas({ x: anchor.x, y: anchor.y });
     curScale = next;
@@ -677,11 +683,8 @@ _UX_JS = """
       scale: next,
       animation: false
     });
-    if (next !== targetScale) raf = requestAnimationFrame(zoomStep);
-    else {
-      animating = false;
-      setTimeout(function () { if (!raf) lean(false, true); }, 90);
-    }
+    animating = false;
+    setTimeout(function () { if (!raf) lean(false, true); }, 90);
   }
   cont.addEventListener('wheel', function (e) {
     e.preventDefault();
@@ -691,7 +694,7 @@ _UX_JS = """
     if (fitScale === null) {
       fitScale = network.getScale();
       MIN_S = Math.max(0.004, fitScale / 6);
-      MAX_S = Math.max(0.4, Math.min(2.0, fitScale * 12));
+      MAX_S = 10;   // vis's own zoom ceiling
     }
     if (curScale === null) { curScale = network.getScale(); targetScale = curScale; }
     var unit = e.deltaMode === 1 ? 0.05 : (e.deltaMode === 2 ? 1.0 : 0.0016);

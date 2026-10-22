@@ -198,3 +198,9 @@
 2026-10-22 14:45:50+0530	20.3s	exit=0	L30: click focus on v19	node harness/probe_click_focus.mjs --file variants/base-ours-v19.html
 2026-10-22 14:46:06+0530	15.6s	exit=0	L30: node sizes at fit and at the max zoom	node harness/probe_draw_sync.mjs --file variants/base-ours-v19.html
 2026-10-22 14:46:57+0530	16.4s	exit=0	L30: smoke the v19 view	node harness/smoke_view.mjs --file view/after.html
+2026-10-22 15:17:57+0530	0.1s	exit=1	L31: zoom gesture from a deep start, ours (v20) vs the official, wheel for wheel	node harness/probe_zoom_gesture.mjs --file variants/base-official-v8.html
+2026-10-22 15:19:00+0530	10.2s	exit=0	L31: wheel gesture from a deep start - ours vs the official	node harness/probe_zoom_gesture.mjs --file variants/base-official-v8.html
+2026-10-22 15:19:12+0530	12.1s	exit=0	L31: the same on ours	node harness/probe_zoom_gesture.mjs --file variants/base-ours-v20.html
+2026-10-22 15:22:45+0530	9.9s	exit=0	L31: instant wheel response, ours vs the official	node harness/probe_zoom_gesture.mjs --file variants/base-ours-v20.html
+2026-10-22 15:23:17+0530	5.9s	exit=0	L31: smoke v20	node harness/smoke_view.mjs --file view/after.html
+2026-10-22 15:23:34+0530	16.5s	exit=0	L31: click focus + arrows still fine on v20	node harness/probe_capabilities.mjs --file variants/base-ours-v20.html
