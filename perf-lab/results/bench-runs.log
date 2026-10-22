@@ -217,3 +217,11 @@
 2026-10-22 18:30:36+0530	12.5s	exit=0	L32: zoom gesture, base-ours-v23	node harness/probe_zoom_gesture.mjs --file variants/base-ours-v23.html
 2026-10-22 18:31:12+0530	13.3s	exit=0	v23: smoke	node harness/smoke_view.mjs --file view/after.html
 2026-10-22 18:31:32+0530	20.0s	exit=0	v23: capability (click focus, arrows) with hover dim removed	node harness/probe_click_focus.mjs --file variants/base-ours-v23.html
+2026-10-22 19:00:20+0530	14.2s	exit=1	trace: deep dense zoom split, base-official-v8	node harness/probe_deep_split.mjs --file variants/base-official-v8.html --scale 3
+2026-10-22 19:00:34+0530	14.1s	exit=1	trace: deep dense zoom split, base-ours-v23	node harness/probe_deep_split.mjs --file variants/base-ours-v23.html --scale 3
+2026-10-22 19:02:05+0530	17.4s	exit=0	trace: deep dense zoom split, base-official-v8	node harness/probe_deep_split.mjs --file variants/base-official-v8.html --scale 3
+2026-10-22 19:02:29+0530	24.1s	exit=0	trace: deep dense zoom split, base-ours-v23	node harness/probe_deep_split.mjs --file variants/base-ours-v23.html --scale 3
+2026-10-22 19:04:20+0530	36.6s	exit=0	trace: work per zoom gesture, base-official-v8	node harness/probe_gesture_work.mjs --file variants/base-official-v8.html
+2026-10-22 19:04:44+0530	23.7s	exit=0	trace: work per zoom gesture, base-ours-v23	node harness/probe_gesture_work.mjs --file variants/base-ours-v23.html
+2026-10-22 19:05:47+0530	10.4s	exit=1	trace: ours with the arrow reveal stubbed out (is it the per-hover redraw?)	node harness/probe_gesture_work.mjs --file variants/base-ours-v23.html --nosync 1
+2026-10-22 19:07:37+0530	18.4s	exit=0	trace: ours with the arrow reveal stubbed (per-hover redraw?)	node harness/probe_gesture_work.mjs --file variants/base-ours-v23.html --nosync 1
