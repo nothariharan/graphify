@@ -183,36 +183,38 @@ def test_gestures_do_not_resize_the_disc(tmp_path):
     assert "size = base * 2; bw = 0;" in block
 
 
-def test_dense_graph_leans_the_draw_during_gestures(tmp_path):
+def test_dense_graph_has_no_gesture_lean_left(tmp_path):
+    """There is nothing to lean any more: the disc is drawn with one fill in every state
+    (L22/L30) and the hover dim is gone (L32). The lean's timer used to fire a FULL extra
+    redraw plus a forced rewrite of all 1886 nodes after every zoom step - twelve extra
+    complete frames per wheel gesture, which is what made a dense zoom feel clumsy."""
     html, _ = _render(tmp_path, 900, 3)
-    assert "function _setLean(on, redraw)" in html
-    assert "network.on('dragStart', function () { _draggingNow = true; _setLean(true); })" in html
-    assert "network.on('dragEnd', function () { _draggingNow = false; _setLean(false, true); })" in html
-    # borders come back
+    assert "function _setLean(on, redraw)" not in html
+    assert "_setLean(" not in html
+    assert "_zoomTimer" not in html
+    assert "_draggingNow" not in html
+    # the disc is still drawn without a border stroke
     assert "_BORDER_FULL = 1.5" in html
+    assert "size = base * 2; bw = 0;" in html
 
 
-def test_lean_writes_node_instances_not_global_setoptions(tmp_path):
+def test_node_sizes_are_written_on_the_instances_not_global_setoptions(tmp_path):
     """network.setOptions re-applies the global borderWidth but also costs a full
-    synchronous redraw (~200ms on a 2290-node aggregate, 670ms+ at 9142 nodes), which
-    landed as a hitch at dragStart and dragEnd. The shipped path mutates the node
-    instances instead."""
+    synchronous redraw (~200ms on a 2290-node aggregate, 670ms+ at 9142 nodes). The shipped
+    path mutates the node instances instead."""
     html, _ = _render(tmp_path, 900, 3)
-    # the gesture's own frame picks it up, so leaning forces no redraw ...
-    assert "if (redraw) { try { network.redraw(); } catch (e) {} }" in html
-    # ... while restoring does, because vis does not redraw on pointer-up.
-    assert "_setLean(false, true)" in html
+    assert "n.options.size = size;" in html
+    assert "n.options.borderWidth = bw;" in html
     # the node instances are written directly, never through a global setOptions
     assert "network.setOptions({ nodes: { borderWidth" not in html
 
 
-def test_lean_restores_borders_after_zooming_stops(tmp_path):
-    """vis emits no zoom start/end, so the restore must be timer-based."""
+def test_zoom_has_no_restore_timer(tmp_path):
+    """The zoom used to leave a 180 ms timer behind that restored the lean, and that
+    timer fired a full extra redraw. Nothing needs restoring any more."""
     html, _ = _render(tmp_path, 900, 3)
-    assert "network.on('zoom'" in html
-    assert "_zoomTimer = setTimeout(" in html
-    # a drag in progress must not have its lean cleared by a stale zoom timer
-    assert "if (!_draggingNow) _setLean(false, true);" in html
+    assert "_zoomTimer" not in html
+    assert "setTimeout(function () { if (!raf) lean(false, true); }, 90);" not in html
 
 
 def _without_js_comments(html: str) -> str:
@@ -311,8 +313,9 @@ def test_edge_batch_uninstalls_and_always_has_a_fallback(tmp_path):
     # a throwing batch falls back to vis's own draw instead of a blank canvas
     assert "if (_errors > 2) { _uninstall(); }" in html
     assert "orig.call(this, ctx, values, sel, hov, via);" in html
-    # gesture lifecycle drives it alongside the border lean
-    assert "_EDGE_BATCH.set(on);" in html
+    # the batch is installed at rest, so nothing has to drive it per gesture
+    assert "_EDGE_BATCH.set(on);" not in html
+    assert "_EDGE_BATCH.setRest(_REST_EDGE_BATCH);" in html
 
 
 def test_dense_graph_keeps_the_edge_batch_at_rest(tmp_path):
@@ -360,13 +363,14 @@ def test_big_sparse_graph_keeps_vis_drawing_edges_at_rest(tmp_path):
     assert "const _EDGE_BATCH = (function ()" in html
 
 
-def test_lean_is_size_gated_not_edge_gated(tmp_path):
-    """A big-but-sparse graph gets the lean draw and no arrow deferral."""
+def test_big_sparse_graph_gets_no_arrow_deferral(tmp_path):
+    """A big-but-sparse graph keeps the eager arrowheads (and gets the disc treatment,
+    which is size-gated, not edge-gated)."""
     html, edges = _render(tmp_path, LEAN_GESTURE_NODE_THRESHOLD + 100, 1)
     assert edges <= ARROW_DEFER_EDGE_THRESHOLD
     assert "arrows: { to: { enabled: true, scaleFactor: 0.5 } }," in html
     assert "const _arrowOn" not in html
-    assert "function _setLean(on, redraw)" in html
+    assert "size = base * 2; bw = 0;" in html
 
 
 def test_sparse_small_graph_gets_none_of_the_gesture_levers(tmp_path):

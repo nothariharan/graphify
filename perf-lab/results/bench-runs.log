@@ -225,3 +225,17 @@
 2026-10-22 19:04:44+0530	23.7s	exit=0	trace: work per zoom gesture, base-ours-v23	node harness/probe_gesture_work.mjs --file variants/base-ours-v23.html
 2026-10-22 19:05:47+0530	10.4s	exit=1	trace: ours with the arrow reveal stubbed out (is it the per-hover redraw?)	node harness/probe_gesture_work.mjs --file variants/base-ours-v23.html --nosync 1
 2026-10-22 19:07:37+0530	18.4s	exit=0	trace: ours with the arrow reveal stubbed (per-hover redraw?)	node harness/probe_gesture_work.mjs --file variants/base-ours-v23.html --nosync 1
+2026-10-22 19:18:39+0530	17.1s	exit=0	trace: zoom in the dense core, ours	node harness/probe_zoom_trace.mjs --file variants/base-ours-v23.html --out results/trace-ours-v23.json
+2026-10-22 19:19:24+0530	18.5s	exit=0	trace: zoom in the dense core, the official build (for the comparison)	node harness/probe_zoom_trace.mjs --file variants/base-official-v8.html --out results/trace-official-v8.json
+2026-10-22 19:20:37+0530	19.2s	exit=0	trace: who asks for each redraw, base-ours-v23	node harness/probe_zoom_trace.mjs --file variants/base-ours-v23.html
+2026-10-22 19:20:57+0530	19.9s	exit=0	trace: who asks for each redraw, base-official-v8	node harness/probe_zoom_trace.mjs --file variants/base-official-v8.html
+2026-10-22 19:21:53+0530	22.3s	exit=0	trace: full stacks of the redraws (ours)	node harness/probe_zoom_trace.mjs --file variants/base-ours-v23.html
+2026-10-22 19:26:09+0530	18.7s	exit=0	L34: the trace again after removing the lean's extra redraw	node harness/probe_zoom_trace.mjs --file variants/base-ours-v24.html
+2026-10-22 19:47:04+0530	32.2s	exit=0	lag hunt: random moves on ours (v24)	node harness/probe_lag_hunt.mjs --file variants/base-ours-v24.html --moves 36 --seed 7 --out results/hunt-ours-v24.json
+2026-10-22 19:48:50+0530	58.7s	exit=0	lag hunt: base-official-v8	node harness/probe_lag_hunt.mjs --file variants/base-official-v8.html --moves 36 --seed 7
+2026-10-22 19:49:23+0530	32.2s	exit=0	lag hunt: base-ours-v24	node harness/probe_lag_hunt.mjs --file variants/base-ours-v24.html --moves 36 --seed 7
+2026-10-22 19:50:31+0530	18.4s	exit=0	click latency (INP for a click), base-official-v8	node harness/probe_click_latency.mjs --file variants/base-official-v8.html
+2026-10-22 19:50:51+0530	19.6s	exit=0	click latency (INP for a click), base-ours-v24	node harness/probe_click_latency.mjs --file variants/base-ours-v24.html
+2026-10-22 19:51:26+0530	10.9s	exit=0	v24: smoke the served after page	node harness/smoke_view.mjs --file view/after.html
+2026-10-22 19:52:25+0530	48.8s	exit=0	lag hunt on the SERVED page: view/before.html	node harness/probe_lag_hunt.mjs --file view/before.html --moves 36 --seed 7
+2026-10-22 19:52:56+0530	30.2s	exit=0	lag hunt on the SERVED page: view/after.html	node harness/probe_lag_hunt.mjs --file view/after.html --moves 36 --seed 7

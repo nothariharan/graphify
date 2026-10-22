@@ -1,0 +1,72 @@
+{
+ "file": "variants/base-ours-v23.html",
+ "wall": 1896,
+ "phases": {
+  "script": 4303471,
+  "style": 0,
+  "layout": 0,
+  "paint": 0,
+  "raster": 0,
+  "other": 2076640
+ },
+ "frames": 0,
+ "lat": [],
+ "cpu": [
+  [
+   "(idle)",
+   1329.02
+  ],
+  [
+   "(program)",
+   507.022
+  ],
+  [
+   "value @ vis-network.min.js",
+   242.77199999999996
+  ],
+  [
+   "_arrowed @ base-ours-v23.html",
+   42.102
+  ],
+  [
+   "_nbApplyNode @ base-ours-v23.html",
+   40.006
+  ],
+  [
+   "stroke",
+   13.46
+  ],
+  [
+   "save",
+   11.978999999999997
+  ],
+  [
+   "setLineDash",
+   10.939
+  ],
+  [
+   "_nbApply @ base-ours-v23.html",
+   9.125
+  ],
+  [
+   "quadraticCurveTo",
+   8.712
+  ],
+  [
+   "restore",
+   8.703
+  ],
+  [
+   "_curveTo @ base-ours-v23.html",
+   5.026
+  ],
+  [
+   "fill",
+   4.799
+  ],
+  [
+   "(garbage collector)",
+   3.499
+  ]
+ ]
+}

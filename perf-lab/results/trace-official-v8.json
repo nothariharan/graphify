@@ -1,0 +1,72 @@
+{
+ "file": "variants/base-official-v8.html",
+ "wall": 1892,
+ "phases": {
+  "script": 5274888,
+  "style": 0,
+  "layout": 0,
+  "paint": 0,
+  "raster": 0,
+  "other": 3734034
+ },
+ "frames": 0,
+ "lat": [],
+ "cpu": [
+  [
+   "value @ vis-network.min.js",
+   1124.7850000000005
+  ],
+  [
+   "(idle)",
+   441.328
+  ],
+  [
+   "(program)",
+   294.073
+  ],
+  [
+   "fill",
+   46.05
+  ],
+  [
+   "stroke",
+   42.172000000000004
+  ],
+  [
+   "iz @ vis-network.min.js",
+   35.819
+  ],
+  [
+   "beginPath",
+   23.942
+  ],
+  [
+   "(anonymous) @ vis-network.min.js",
+   16.813
+  ],
+  [
+   "(garbage collector)",
+   9.731
+  ],
+  [
+   "lineTo",
+   8.137
+  ],
+  [
+   "quadraticCurveTo",
+   6.239
+  ],
+  [
+   "save",
+   5.462
+  ],
+  [
+   "closePath",
+   5.3469999999999995
+  ],
+  [
+   "drawExternalLabel @ vis-network.min.js",
+   4.414
+  ]
+ ]
+}

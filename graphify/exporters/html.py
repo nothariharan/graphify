@@ -151,7 +151,7 @@ _LEAN_GESTURE_JS = """
 // with one fill at all times (see _nbApply below), so there is nothing to lean and the
 // nodes no longer change size when the pointer goes down.
 const _BORDER_FULL = 1.5;
-let _lean = false, _draggingNow = false, _zoomTimer = null;
+
 
 // Batched edge pass. vis draws each edge by calling edgeType.drawLine(ctx, values, ...);
 // for the duration of a gesture that call is replaced by one draw of every edge, grouped
@@ -334,18 +334,12 @@ const _EDGE_BATCH = (function () {
   };
 })();
 
-function _setLean(on, redraw) {
-  if (on === _lean) return;
-  _lean = on;
-  _EDGE_BATCH.set(on);
-  // The discs change size for the length of a gesture (see _nbApplyNode), so the nodes
-  // have to be rewritten when the gesture starts and when it ends.
-  try { _nbApply(true); } catch (e) {}
-  // A drag/zoom redraws itself, so leaning needs no redraw; restoring does, because vis
-  // does not redraw when the pointer is released (measured: zero canvas strokes in the
-  // 20 frames after pointerup unless something forces one).
-  if (redraw) { try { network.redraw(); } catch (e) {} }
-}
+// The "lean" (drop the node border for the length of a gesture) is gone: the disc is
+// drawn with one fill in every state (L22/L30), so there is nothing to lean any more.
+// It used to leave a timer behind that fired a FULL extra redraw plus a forced rewrite of
+// all 1886 nodes after every zoom step - twelve extra complete frames per wheel gesture,
+// which is what made a dense zoom feel clumsy (measured: 29 redraws per gesture against
+// the shipped viewer's 17).
 
 // ---- the node disc without the border stroke (#perf L22) ----------------
 //
@@ -366,7 +360,7 @@ function _setLean(on, redraw) {
 // and, crucially, it happens ONCE per node per crossing. The earlier version recomputed
 // `size = base + min(base, 1.5/scale)` on every zoom frame, which rewrote the size of all
 // 1886 nodes per frame and made the dots shimmer and the zoom hitch.
-let _nbBase = null, _nbHover = {}, _nbSel = {};
+let _nbBase = null, _nbHover = {}, _nbSel = {}, _nbScale = -1;
 function _nbApplyNode(id, scale, force) {
   const n = network.body && network.body.nodes[id];
   if (!n || !n.options) return;
@@ -402,6 +396,10 @@ function _nbApply(force) {
   }
   let scale = 1;
   try { scale = network.body.view.scale || 1; } catch (e) {}
+  // The disc only depends on the scale (and on the ring state, which the hover/select
+  // handlers apply directly), so a frame that does not change the scale has nothing to do.
+  if (!force && scale === _nbScale) return;
+  _nbScale = scale;
   for (const id in nodes) _nbApplyNode(id, scale, force);
 }
 function _nbScaleNow() {{ let s = 1; try {{ s = network.body.view.scale || 1; }} catch (e) {{}} return s; }}
@@ -428,15 +426,6 @@ try {
   nodesDS.on('*', function () { _EDGE_BATCH.dirty(); });
   edgesDS.on('*', function () { _EDGE_BATCH.dirty(); });
 } catch (e) {}
-network.on('dragStart', function () { _draggingNow = true; _setLean(true); });
-network.on('dragEnd', function () { _draggingNow = false; _setLean(false, true); });
-// vis emits no zoom start/end, so lean for the duration of the zoom and restore once
-// the gesture goes quiet (180ms). This took rsl's zoom from 14.2 to ~50fps.
-network.on('zoom', function () {
-  _setLean(true);
-  clearTimeout(_zoomTimer);
-  _zoomTimer = setTimeout(function () { if (!_draggingNow) _setLean(false, true); }, 180);
-});
 """
 
 
@@ -609,16 +598,6 @@ _UX_JS = """
   var cont = document.getElementById('graph');
   if (!cont || typeof network === 'undefined') return;
 
-  function gestureActive() {
-    try {
-      return (typeof _lean !== 'undefined' && _lean) ||
-             (typeof _dragging !== 'undefined' && _dragging);
-    } catch (e) { return false; }
-  }
-  function lean(on, redraw) {
-    try { if (typeof _setLean === 'function') _setLean(on, redraw); } catch (e) {}
-  }
-
   // ---- 1. eased zoom at the cursor -------------------------------------
   // network.moveTo(..., {animation:false}) does NOT emit zoom/pan in vis 9.1.6
   // (measured: 2 moveTo calls -> 0 zoom, 0 pan), so the lean is driven here
@@ -636,7 +615,7 @@ _UX_JS = """
   }
   function zoomStep() {
     raf = 0;
-    if (targetScale === null || !anchor) { animating = false; lean(false, true); return; }
+    if (targetScale === null || !anchor) { animating = false; return; }
     var c = viewCenter();
     // Land on the target the wheel asked for, in this frame. The earlier version eased
     // toward it (k * 0.25 per frame, ~40 ms of trail), which reads as lag next to vis's
@@ -652,7 +631,6 @@ _UX_JS = """
       animation: false
     });
     animating = false;
-    setTimeout(function () { if (!raf) lean(false, true); }, 90);
   }
   cont.addEventListener('wheel', function (e) {
     e.preventDefault();
@@ -673,7 +651,6 @@ _UX_JS = """
     targetScale = Math.max(MIN_S, Math.min(MAX_S, targetScale * Math.exp(-e.deltaY * unit)));
     anchor = { x: e.clientX, y: e.clientY };
     animating = true;
-    lean(true);
     if (!raf) raf = requestAnimationFrame(zoomStep);
   }, { passive: false, capture: true });
 

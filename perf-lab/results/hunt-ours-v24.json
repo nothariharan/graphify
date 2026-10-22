@@ -1,0 +1,110 @@
+{
+ "file": "variants/base-ours-v24.html",
+ "moves": 36,
+ "seed": 7,
+ "frames": 1441,
+ "gaps": {
+  "p50": 7,
+  "p95": 27.8,
+  "max": 451.3
+ },
+ "bad": [
+  {
+   "gap": 451.3000000000011,
+   "scale": 0.08274345833109292,
+   "t": 14482.2
+  },
+  {
+   "gap": 90.39999999999964,
+   "scale": 0.07525971194789148,
+   "t": 14732.3
+  },
+  {
+   "gap": 90.19999999999891,
+   "scale": 0.08274345833109292,
+   "t": 14593.3
+  }
+ ],
+ "cpu": [
+  [
+   "(idle)",
+   9013703
+  ],
+  [
+   "value @ vis-network.min.js",
+   3119844
+  ],
+  [
+   "(program)",
+   1485181
+  ],
+  [
+   "restore",
+   384292
+  ],
+  [
+   "save",
+   360872
+  ],
+  [
+   "_arrowed @ base-ours-v24.html",
+   313845
+  ],
+  [
+   "fill",
+   284328
+  ],
+  [
+   "(garbage collector)",
+   186438
+  ],
+  [
+   "stroke",
+   157606
+  ],
+  [
+   "drawExternalLabel @ vis-network.min.js",
+   141310
+  ],
+  [
+   "_nbApplyNode @ base-ours-v24.html",
+   121523
+  ],
+  [
+   "setLineDash",
+   94793
+  ],
+  [
+   "_curveTo @ base-ours-v24.html",
+   84732
+  ],
+  [
+   "Vm @ vis-network.min.js",
+   62156
+  ],
+  [
+   "drawExternalLabels @ vis-network.min.js",
+   53776
+  ],
+  [
+   "_nbApply @ base-ours-v24.html",
+   50463
+  ],
+  [
+   "quadraticCurveTo",
+   43752
+  ],
+  [
+   "et.drawLine @ base-ours-v24.html",
+   41891
+  ],
+  [
+   "requestAnimationFrame",
+   41239
+  ],
+  [
+   "_drawAll @ base-ours-v24.html",
+   31200
+  ]
+ ]
+}
