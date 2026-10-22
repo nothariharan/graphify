@@ -73,11 +73,11 @@ HEAD build): **node drag 40.4 → 82.9 fps (x2.05), pan 39.1 → 78.9 (x2.02), z
 (x5.29)**, stalled frames (>33 ms) 13/14/91 per 90 → 1/1/0. Across all certified runs of this
 lever the paired ratio spans **x1.7–x5.8**.
 
-Shipped artifact: `variants/base-ours-v18.html` (2008327 bytes, sha256
-`3386aa683ea5a02b76f82cd4c4e349a9f2903553e33d949fdb2824d3edba96c6`). Regenerate it
+Shipped artifact: `variants/base-ours-v19.html` (2009364 bytes, sha256
+`8507ebe63bb37e35e011ec499eac0e8dc32d566131650cb13a69518cc0a5e2eb`). Regenerate it
 from the working tree with:
 ```powershell
-python harness/build_base.py --graph-json ../worked/rsl-siege-manager/graph.json --name ours-v18
+python harness/build_base.py --graph-json ../worked/rsl-siege-manager/graph.json --name ours-v19
 ```
 If your regenerated artifact's exporter-block hash differs from the above, the exporter moved:
 say so in `LOG.md`, and re-measure before quoting any number in this file.
@@ -345,7 +345,7 @@ hypothesis in it *before* you measure.
 
 1. Read this file, `STATE.md` tick status, the last 20 lines of `LOG.md`, the tail of `DECISIONS.tsv`.
 2. `python harness/bench_lock.py status`.
-3. Confirm the shipped artifact is current: rebuild `base-ours-v18.html` and compare the
+3. Confirm the shipped artifact is current: rebuild `base-ours-v19.html` and compare the
    exporter block against the hash above.
 4. `python -m pytest tests/test_html_perf_levers.py -q` (from the repo root) - 43 tests, all
    green, before you change anything.

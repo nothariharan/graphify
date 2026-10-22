@@ -355,35 +355,44 @@ function _setLean(on, redraw) {
 // strokes per frame, and they are the single biggest cost of a resting frame: the frame
 // measures 86 ms with the borders and 29 ms without them (same picture, one fill).
 //
-// The border colour is the fill colour, so the same disc can be drawn with one fill: the
-// size is grown by exactly the width the border would have added, which keeps the disc
-// the same size at every zoom level. Hovered and selected nodes keep a real border,
-// because theirs is white and therefore visible.
-let _nbBase = null, _nbHover = {}, _nbSel = {}, _nbScale = -1;
-function _nbPlainSize(base, scale) {
-  return base + Math.min(base, _BORDER_FULL / (scale || 1));
-}
-function _nbApplyNode(id, scale) {
+// The border colour is the fill colour, so the same disc can be drawn with one fill.
+// vis's border is min(nodeWidth, borderWidth/scale) world units wide, and that min has two
+// regimes: while the border is wider than the node it is capped at the node's own width (so
+// the disc is exactly twice the fill radius, and the fill alone reproduces it), and once the
+// zoom makes the border thinner than the node, vis's own border is the right thing to use -
+// only a few nodes are on screen there, so the border strokes are cheap.
+//
+// Switching between the two at that boundary is seamless (both draw the same radius there)
+// and, crucially, it happens ONCE per node per crossing. The earlier version recomputed
+// `size = base + min(base, 1.5/scale)` on every zoom frame, which rewrote the size of all
+// 1886 nodes per frame and made the dots shimmer and the zoom hitch.
+let _nbBase = null, _nbHover = {}, _nbSel = {};
+function _nbApplyNode(id, scale, force) {
   const n = network.body && network.body.nodes[id];
   if (!n || !n.options) return;
   let base = _nbBase[id];
   if (base === undefined) _nbBase[id] = base = n.options.size;
+  let size, bw;
   if (_lean) {
-    // During a gesture the disc is drawn at the fill radius only: the border is not
-    // there to grow it any more, so the lean has to shrink the fill instead. Same look
-    // as the old borderless lean, and measurably cheaper (a drag is 33% faster with the
-    // small discs than with the full ones).
-    n.options.size = base;
-    n.options.borderWidth = 0;
-    return;
-  }
-  if (_nbHover[id] || _nbSel[id]) {
-    n.options.size = base;
-    n.options.borderWidth = _BORDER_FULL;
+    // During a gesture the disc is drawn at the fill radius only: the border is not there
+    // to grow it any more, so the lean has to shrink the fill instead. Same look as the old
+    // borderless lean, and measurably cheaper (a drag is 33% faster with the small discs).
+    size = base; bw = 0;
+  } else if (_nbHover[id] || _nbSel[id]) {
+    // hovered/selected: the border is white and visible, so keep a real one
+    size = base; bw = _BORDER_FULL;
+  } else if (_BORDER_FULL / (scale || 1) < base) {
+    // the border is thinner than the node: use vis's own border
+    size = base; bw = _BORDER_FULL;
   } else {
-    n.options.size = _nbPlainSize(base, scale);
-    n.options.borderWidth = 0;
+    // the border would be capped at the node's width: draw the disc as one fill
+    size = base * 2; bw = 0;
   }
+  if (!force && n.__nbSize === size && n.__nbBw === bw) return;
+  n.__nbSize = size;
+  n.__nbBw = bw;
+  n.options.size = size;
+  n.options.borderWidth = bw;
 }
 function _nbApply(force) {
   const nodes = network.body && network.body.nodes;
@@ -394,14 +403,13 @@ function _nbApply(force) {
   }
   let scale = 1;
   try { scale = network.body.view.scale || 1; } catch (e) {}
-  if (!force && scale === _nbScale) return;
-  _nbScale = scale;
-  for (const id in nodes) _nbApplyNode(id, scale);
+  for (const id in nodes) _nbApplyNode(id, scale, force);
 }
-network.on('hoverNode', function (p) { _nbHover[p.node] = 1; _nbApplyNode(p.node, _nbScale < 0 ? 1 : _nbScale); });
-network.on('blurNode', function (p) { delete _nbHover[p.node]; _nbApplyNode(p.node, _nbScale < 0 ? 1 : _nbScale); });
-network.on('selectNode', function (p) { p.nodes.forEach(function (id) { _nbSel[id] = 1; _nbApplyNode(id, _nbScale < 0 ? 1 : _nbScale); }); });
-network.on('deselectNode', function (p) { p.nodes.forEach(function (id) { delete _nbSel[id]; _nbApplyNode(id, _nbScale < 0 ? 1 : _nbScale); }); });
+function _nbScaleNow() {{ let s = 1; try {{ s = network.body.view.scale || 1; }} catch (e) {{}} return s; }}
+network.on('hoverNode', function (p) { _nbHover[p.node] = 1; _nbApplyNode(p.node, _nbScaleNow(), true); });
+network.on('blurNode', function (p) { delete _nbHover[p.node]; _nbApplyNode(p.node, _nbScaleNow(), true); });
+network.on('selectNode', function (p) { p.nodes.forEach(function (id) { _nbSel[id] = 1; _nbApplyNode(id, _nbScaleNow(), true); }); });
+network.on('deselectNode', function (p) { p.nodes.forEach(function (id) { delete _nbSel[id]; _nbApplyNode(id, _nbScaleNow(), true); }); });
 // The size follows the zoom (the border it replaces was a screen-constant width), so it
 // is refreshed when the scale changes. Not while the solver is running: the layout must
 // see the sizes the exporter shipped, or the picture would differ from the unbaked one.
@@ -821,7 +829,9 @@ _UX_JS = """
     if (!hoverRaf) hoverRaf = requestAnimationFrame(flushHover);
   }
   function setClick(id) {
-    if (gestureActive()) return;
+    // No gestureActive() gate here: a click is not a gesture (vis does not fire one during
+    // a drag), and the gate used to swallow the click that came right after a zoom, when
+    // the lean was still on - the user clicked a node and nothing dimmed.
     if (clickOn && clickNode === id) { clearClick(); return; }   // click again to clear
     clickKeep = neighbourhood(id);
     clickNode = id;

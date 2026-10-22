@@ -190,3 +190,11 @@
 2026-10-22 13:37:52+0530	48.4s	exit=0	L29: arrowhead + selection + legend still work on v18	node harness/probe_capabilities.mjs --file variants/base-ours-v18.html
 2026-10-22 13:39:01+0530	36.7s	exit=0	L29: the arrowhead on a hovered edge, v18	node harness/probe_capabilities.mjs --file variants/base-ours-v18.html
 2026-10-22 13:42:21+0530	13.8s	exit=0	L29: smoke the v18 view	node harness/smoke_view.mjs --file view/after.html
+2026-10-22 13:50:33+0530	207.0s	exit=0	L29: gestures must not regress (v16 vs v18), 3 rounds	node harness/ab_drag.mjs --variants v16=variants/base-ours-v16.html,v18=variants/base-ours-v18.html --rounds 3 --gestures node,pan --steps 90 --out results/ab-rsl-v16-v18.csv
+2026-10-22 13:54:48+0530	13.8s	exit=0	final view: smoke the official before page	node harness/smoke_view.mjs --file view/before.html
+2026-10-22 13:55:00+0530	11.3s	exit=0	final view: smoke the after page (v18)	node harness/smoke_view.mjs --file view/after.html
+2026-10-22 14:33:28+0530	20.2s	exit=0	click focus on v18: is it dimming at all?	node harness/probe_click_focus.mjs --file variants/base-ours-v18.html
+2026-10-22 14:45:08+0530	266.5s	exit=0	L30: zoom gestures, v18 (per-frame resizing) vs v19 (mode switch only)	node harness/ab_drag.mjs --variants v18=variants/base-ours-v18.html,v19=variants/base-ours-v19.html --rounds 5 --gestures zoom --steps 90 --out results/ab-rsl-v18-v19-zoom.csv
+2026-10-22 14:45:50+0530	20.3s	exit=0	L30: click focus on v19	node harness/probe_click_focus.mjs --file variants/base-ours-v19.html
+2026-10-22 14:46:06+0530	15.6s	exit=0	L30: node sizes at fit and at the max zoom	node harness/probe_draw_sync.mjs --file variants/base-ours-v19.html
+2026-10-22 14:46:57+0530	16.4s	exit=0	L30: smoke the v19 view	node harness/smoke_view.mjs --file view/after.html

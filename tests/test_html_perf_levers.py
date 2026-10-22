@@ -138,20 +138,26 @@ def test_offline_vis_fallback_present(tmp_path):
 # because theirs is white.
 
 def test_node_disc_is_drawn_without_the_border_stroke(tmp_path):
+    """vis's border is min(nodeWidth, 1.5/scale) world units. While that is capped at the
+    node's own width the disc is exactly twice the fill radius, so one fill reproduces it;
+    once the zoom makes the border thinner than the node, vis's own border is used. The
+    switch is a MODE change, applied once per node per crossing - not a size recomputed on
+    every zoom frame, which rewrote 1886 sizes per frame and made the dots shimmer."""
     html, _ = _render(tmp_path, 900, 3)
-    assert "function _nbPlainSize(base, scale)" in html
-    assert "return base + Math.min(base, _BORDER_FULL / (scale || 1));" in html
-    assert "n.options.borderWidth = 0;" in html
-    assert "n.options.size = _nbPlainSize(base, scale);" in html
+    assert "if (_BORDER_FULL / (scale || 1) < base) {" in html
+    assert "size = base * 2; bw = 0;" in html
+    assert "size = base; bw = _BORDER_FULL;" in html
+    assert "if (!force && n.__nbSize === size && n.__nbBw === bw) return;" in html
+    assert "n.options.size = size;" in html
+    assert "n.options.borderWidth = bw;" in html
 
 
 def test_hovered_and_selected_nodes_keep_their_white_border(tmp_path):
     """The border of a hovered or selected node is white and therefore visible: it must
     not be dropped with the rest."""
     html, _ = _render(tmp_path, 900, 3)
-    assert "if (_nbHover[id] || _nbSel[id]) {" in html
-    assert "n.options.size = base;" in html
-    assert "n.options.borderWidth = _BORDER_FULL;" in html
+    assert "} else if (_nbHover[id] || _nbSel[id]) {" in html
+    assert "size = base; bw = _BORDER_FULL;" in html
     for ev in ("hoverNode", "blurNode", "selectNode", "deselectNode"):
         assert "network.on('%s'" % ev in html
 
@@ -172,8 +178,7 @@ def test_lean_shrinks_the_disc_for_the_length_of_a_gesture(tmp_path):
     ones, so the lean still earns its place."""
     html, _ = _render(tmp_path, 900, 3)
     assert "if (_lean) {" in html
-    assert "n.options.size = base;" in html
-    assert "n.options.borderWidth = 0;" in html
+    assert "size = base; bw = 0;" in html
     # and the gesture has to rewrite the nodes when it starts and when it ends
     assert "try { _nbApply(true); } catch (e) {}" in html
 
