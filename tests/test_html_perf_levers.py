@@ -421,33 +421,21 @@ def test_large_graph_gets_the_frame_coalesced_zoom(tmp_path):
     assert "var wp = network.DOMtoCanvas({ x: anchor.x, y: anchor.y });" in html
 
 
-def test_hover_focus_is_hover_only_and_always_restored(tmp_path):
-    """Dimming must never survive the pointer leaving the node: blur restores every
-    node, and a drag clears focus before it starts. The repaint is coalesced to one per
-    frame instead of a debounced timer per event (a hover sweep in the dense centre
-    stalled up to 208 ms), so the restore rides on the next animation frame."""
-    html, _ = _render(tmp_path, 900, 3)
-    code = _without_js_comments(html)
-    assert "network.on('hoverNode', function (p) { scheduleHover(p.node); });" in code
-    assert "network.on('blurNode', function () { scheduleHover(null); });" in code
-    assert "network.on('dragStart', function () { scheduleHover(null); });" in code
-    assert "if (!hoverRaf) hoverRaf = requestAnimationFrame(flushHover);" in code
-    # focus is reached by mutating the instance colours, never by updating the DataSet
-    # (1886-node update measured 149.6ms) and never by writing opacity onto nothing
-    assert "nc.background = o.bg; nc.border = o.bd;" in code
-    assert "nc.background = d; nc.border = d;" in code
-    assert "nodesDS.update" not in html.split("// ---- 2. hover focus")[1].split("// ---- 3.")[0]
-
-
-def test_hover_paint_is_a_delta(tmp_path):
-    """Focus to focus only touches the nodes that change; a full pass is only needed
-    when entering from the all-bright state or clearing."""
+def test_hover_never_dims_anything(tmp_path):
+    """Hover must leave the picture whole: the user does not want the graph to dim while
+    the pointer moves, and during a zoom nodes slide under the cursor - every hover event
+    used to repaint the whole graph. Dimming is the click focus's job."""
     html, _ = _render(tmp_path, 900, 3)
     block = _ux_block(html)
-    assert "var paintedKeep = null;" in block
-    assert "prev.forEach(function (id) { if (!keep.has(id)) touched.push(id); });" in block
-    assert "keep.forEach(function (id) { if (!prev.has(id)) touched.push(id); });" in block
-    assert "var full = !prev || !keep;" in block
+    assert "scheduleHover" not in block
+    assert "flushHover" not in block
+    assert "network.on('hoverNode', function (p) { scheduleHover" not in block
+    # the click focus is still there, and still a delta paint on the instances
+    assert "function setClick(id)" in block
+    assert "function clearClick()" in block
+    assert "nc.background = o.bg; nc.border = o.bd;" in block
+    assert "nc.background = d; nc.border = d;" in block
+    assert "nodesDS.update" not in html.split("// ---- 2. click focus")[1].split("// ---- 3.")[0]
 
 
 def _ux_block(html: str) -> str:
@@ -570,8 +558,8 @@ def test_click_focus_dims_what_is_not_connected(tmp_path):
     # Escape and a second click on the same node clear it
     assert "if (e.key === 'Escape') clearClick();" in block
     assert "if (clickOn && clickNode === id) { clearClick(); return; }" in block
-    # the hover focus must not fight it
-    assert "if (clickOn) return;              // a clicked focus owns the picture" in block
+    # hover does not compete with it any more: nothing on hover repaints
+    assert "scheduleHover" not in block
 
 
 def test_click_focus_never_uses_opacity(tmp_path):

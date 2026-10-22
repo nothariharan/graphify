@@ -59,8 +59,7 @@ behave worse is a regression.
 | batched edge pass | **for the whole session** on dense graphs, `edgeType.drawLine` is replaced per edge by **one draw of every edge**, grouped by (colour, base width); 3876 strokes → 20 on rsl. Dashed (confidence) edges, selected/hovered edges and arrow-bearing edges still go to vis. L12 | same gate as the lean (`_REST_EDGE_BATCH`) |
 | curve fidelity | the batch draws the same quadratic vis draws at rest (`_curveTo` reproduces `_getViaCoordinates` for `continuous`), verified against `edgeType.getViaNode()` on all 3876 edges, worst disagreement 0.0 | — |
 | eased zoom (L13) | wheel events accumulate a target scale, one redraw per rAF frame, the world point under the cursor held fixed, clamped `fit/6 … min(2.0, fit*12)`; vis's own wheel handler bypassed | same gate as the lean |
-| hover focus (L13) | hovered node + 1-hop keep their colour, the rest blend 55% toward `--bg`; written on the node instances (never `nodesDS.update`), restored on blur | same gate as the lean |
-| click focus (L24) | the same picture, made sticky: click a node and everything not connected to it dims down until you click away (empty space, the same node, or Escape). The hover focus is suppressed while it is active, so moving the pointer cannot wipe it | same gate as the lean |
+| click focus (L24/L32) | click a node and everything not connected to it dims down until you click away (empty space, the same node, or Escape). **Hover never dims** - the picture stays whole while the pointer moves, and hovering during a zoom used to repaint the whole graph | same gate as the lean |
 | colour-preserving selection (L13) | highlight/hover keep the community fill and add a white border ring; no `#ffffff` fill anywhere | always |
 | frame HUD (L13) | fps + frame ms, toggled with `H`, textContent only | same gate as the lean |
 | light theme (L25) | the community palette is the SAME in both themes (a darkened light variant was tried and rejected by the user); what follows the theme is the edge colour/opacity (0.7 dark, 0.92 light), the selection ring (white was invisible on white) and the dimming amount (0.55 / 0.42) | always |
@@ -73,11 +72,11 @@ HEAD build): **node drag 40.4 → 82.9 fps (x2.05), pan 39.1 → 78.9 (x2.02), z
 (x5.29)**, stalled frames (>33 ms) 13/14/91 per 90 → 1/1/0. Across all certified runs of this
 lever the paired ratio spans **x1.7–x5.8**.
 
-Shipped artifact: `variants/base-ours-v20.html` (2009665 bytes, sha256
-`527f849fa5cfc2a45842a21bbac505b6a6db786a6f26437f1accc30277d8a6eb`). Regenerate it
+Shipped artifact: `variants/base-ours-v23.html` (2009027 bytes, sha256
+`ff99b4e8da4ff1d5d1f296ae0cbac5f81a62873ce7213d0b9a474b5452e83312`). Regenerate it
 from the working tree with:
 ```powershell
-python harness/build_base.py --graph-json ../worked/rsl-siege-manager/graph.json --name ours-v20
+python harness/build_base.py --graph-json ../worked/rsl-siege-manager/graph.json --name ours-v23
 ```
 If your regenerated artifact's exporter-block hash differs from the above, the exporter moved:
 say so in `LOG.md`, and re-measure before quoting any number in this file.
@@ -344,7 +343,7 @@ hypothesis in it *before* you measure.
 
 1. Read this file, `STATE.md` tick status, the last 20 lines of `LOG.md`, the tail of `DECISIONS.tsv`.
 2. `python harness/bench_lock.py status`.
-3. Confirm the shipped artifact is current: rebuild `base-ours-v20.html` and compare the
+3. Confirm the shipped artifact is current: rebuild `base-ours-v23.html` and compare the
    exporter block against the hash above.
 4. `python -m pytest tests/test_html_perf_levers.py -q` (from the repo root) - 43 tests, all
    green, before you change anything.

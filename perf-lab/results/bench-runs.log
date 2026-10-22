@@ -206,3 +206,14 @@
 2026-10-22 15:23:34+0530	16.5s	exit=0	L31: click focus + arrows still fine on v20	node harness/probe_capabilities.mjs --file variants/base-ours-v20.html
 2026-10-22 18:13:17+0530	18.7s	exit=0	colours: the shipped assignment back, top-left corner	node harness/shot_page.mjs --file variants/base-ours-v21.html --out shots/colours-v21.png --theme dark
 2026-10-22 18:14:38+0530	14.7s	exit=0	v21: smoke	node harness/smoke_view.mjs --file view/after.html
+2026-10-22 18:26:27+0530	19.2s	exit=0	L32: wheel zoom in the dense centre with the pointer over it - official, v21 (hover dims), v22 (no hover dim)	node harness/probe_zoom_gesture.mjs --file variants/base-official-v8.html
+2026-10-22 18:26:45+0530	17.6s	exit=0	L32: v21	node harness/probe_zoom_gesture.mjs --file variants/base-ours-v21.html
+2026-10-22 18:27:04+0530	19.0s	exit=0	L32: v22	node harness/probe_zoom_gesture.mjs --file variants/base-ours-v22.html
+2026-10-22 18:27:41+0530	18.7s	exit=0	L32: zoom gesture report, base-official-v8	node harness/probe_zoom_gesture.mjs --file variants/base-official-v8.html
+2026-10-22 18:28:03+0530	22.4s	exit=0	L32: zoom gesture report, base-ours-v21	node harness/probe_zoom_gesture.mjs --file variants/base-ours-v21.html
+2026-10-22 18:28:23+0530	19.6s	exit=0	L32: zoom gesture report, base-ours-v22	node harness/probe_zoom_gesture.mjs --file variants/base-ours-v22.html
+2026-10-22 18:30:07+0530	20.5s	exit=0	L32: zoom gesture, base-official-v8	node harness/probe_zoom_gesture.mjs --file variants/base-official-v8.html
+2026-10-22 18:30:24+0530	16.4s	exit=0	L32: zoom gesture, base-ours-v22	node harness/probe_zoom_gesture.mjs --file variants/base-ours-v22.html
+2026-10-22 18:30:36+0530	12.5s	exit=0	L32: zoom gesture, base-ours-v23	node harness/probe_zoom_gesture.mjs --file variants/base-ours-v23.html
+2026-10-22 18:31:12+0530	13.3s	exit=0	v23: smoke	node harness/smoke_view.mjs --file view/after.html
+2026-10-22 18:31:32+0530	20.0s	exit=0	v23: capability (click focus, arrows) with hover dim removed	node harness/probe_click_focus.mjs --file variants/base-ours-v23.html

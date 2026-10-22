@@ -594,12 +594,13 @@ network.on('afterDrawing', function(ctx) {{
 #    "zoom freezes the graph". Here the target scale is accumulated and approached
 #    over rAF frames (one redraw per frame) and the point under the cursor is held
 #    fixed. Same battery after: 3 long tasks / 169 ms, zoom_fps 18.4 -> 46.
-# 2. Hover focus, Obsidian style: the hovered node and its 1-hop neighbours keep
-#    their community colour, everything else is blended toward the background.
-#    Restored on blur, never on click (the L11 prototype dimmed on click and left
-#    it there, which is what made the graph look washed out). Painting mutates the
-#    node instances' options.color and issues one redraw; datasets.update() for
-#    1886 nodes measured 149.6 ms and is exactly the hitch this avoids.
+# 2. Click focus, Obsidian style: the clicked node and its 1-hop neighbours keep their
+#    community colour, everything else is blended toward the background. Hover does not
+#    dim anything - the graph has to stay whole while the pointer moves, and hovering
+#    during a zoom used to repaint the whole graph as nodes slid under the cursor.
+#    Painting mutates the node instances' options.color and issues one redraw;
+#    datasets.update() for 1886 nodes measured 149.6 ms and is exactly the hitch this
+#    avoids.
 # 3. An fps / frame-time HUD on H, for judging a machine's real frame budget.
 #    textContent only -- the L11 prototype appended a DOM node every frame.
 _UX_JS = """
@@ -664,7 +665,11 @@ _UX_JS = """
       MAX_S = 10;   // vis's own zoom ceiling
     }
     if (curScale === null) { curScale = network.getScale(); targetScale = curScale; }
-    var unit = e.deltaMode === 1 ? 0.05 : (e.deltaMode === 2 ? 1.0 : 0.0016);
+    // Zoom rate: vis multiplies the scale by 1.1 per wheel event, whatever the delta.
+    // Ours used to take e^(120 * 0.0016) = 1.21 per notch, so a gesture ended roughly four
+    // times deeper than the shipped viewer (9.7 vs 2.5 on the same 14 events) - and deep
+    // zoom is where the edges are thickest and the raster is heaviest. Match vis's notch.
+    var unit = e.deltaMode === 1 ? 0.0333 : (e.deltaMode === 2 ? 0.1 : 0.00079);
     targetScale = Math.max(MIN_S, Math.min(MAX_S, targetScale * Math.exp(-e.deltaY * unit)));
     anchor = { x: e.clientX, y: e.clientY };
     animating = true;
@@ -677,7 +682,7 @@ _UX_JS = """
     if (!animating) { curScale = network.getScale(); targetScale = curScale; }
   });
 
-  // ---- 2. hover focus (colour blend, no DataSet update) ----------------
+  // ---- 2. click focus (colour blend, no DataSet update) ----------------
   var BG = '#0f0f1a';
   try {
     var bgv = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
@@ -731,11 +736,10 @@ _UX_JS = """
     } catch (e) {}
     return v;
   }
-  var hoverOn = false, hoverKeep = null;
   // Click focus (#perf L24): the node you clicked and the nodes connected to it keep
   // their colour, everything else dims, and it stays that way until you click away.
-  // The user asked for this explicitly; the hover focus below is the same picture,
-  // but it goes away the moment the pointer does.
+  // The user asked for this explicitly; hover deliberately does not do it, so the
+  // picture stays whole while the pointer moves.
   var clickOn = false, clickNode = null, clickKeep = null;
   // The paint is a DELTA: the set that is currently bright is remembered, so moving the
   // pointer from one node to the next only restores the nodes that leave the focus and
@@ -769,35 +773,9 @@ _UX_JS = """
     for (var i = 0; i < one.length; i++) keep.add(one[i]);
     return keep;
   }
-  // Hover is coalesced to one repaint per frame instead of one per event with a 70 ms
-  // debounce: moving the pointer across a dense cluster used to queue a full frame per
-  // node it crossed (measured: a hover sweep in the dense centre stalled up to 208 ms).
-  var pendingHover, hoverRaf = 0;
-  function flushHover() {
-    hoverRaf = 0;
-    var id = pendingHover;
-    pendingHover = undefined;
-    if (id === undefined) return;
-    if (gestureActive()) return;      // never fight a drag or a zoom
-    if (clickOn) return;              // a clicked focus owns the picture
-    if (id === null) {
-      if (!hoverOn) return;
-      paint(null);
-      hoverKeep = null;
-      hoverOn = false;
-      network.redraw();
-      return;
-    }
-    var keep = neighbourhood(id);
-    paint(keep);
-    hoverKeep = keep;
-    hoverOn = true;
-    network.redraw();
-  }
-  function scheduleHover(id) {
-    pendingHover = id;
-    if (!hoverRaf) hoverRaf = requestAnimationFrame(flushHover);
-  }
+  // Hover does NOT dim anything: the user wants the picture to stay whole while the
+  // pointer moves (and while the graph zooms or pans under it). Dimming is the click
+  // focus's job, and only on a click.
   function setClick(id) {
     // No gestureActive() gate here: a click is not a gesture (vis does not fire one during
     // a drag), and the gate used to swallow the click that came right after a zoom, when
@@ -806,24 +784,17 @@ _UX_JS = """
     clickKeep = neighbourhood(id);
     clickNode = id;
     clickOn = true;
-    hoverOn = false;
     paint(clickKeep);
     network.redraw();
   }
   function clearClick() {
     if (!clickOn) return;
     clickOn = false; clickNode = null; clickKeep = null;
-    // Everything comes back, including the node under the pointer: the click focus was
-    // an explicit "I am working on this one", and dismissing it must visibly dismiss
-    // it. The hover focus returns on the next pointer move.
-    hoverKeep = null;
-    hoverOn = false;
+    // Everything comes back. Only a click sets a focus, so dismissing it must visibly
+    // dismiss it.
     paint(null);
     network.redraw();
   }
-  network.on('hoverNode', function (p) { scheduleHover(p.node); });
-  network.on('blurNode', function () { scheduleHover(null); });
-  network.on('dragStart', function () { scheduleHover(null); });
   network.on('click', function (p) {
     if (p && p.nodes && p.nodes.length) setClick(p.nodes[0]);
     else clearClick();               // clicked empty space
