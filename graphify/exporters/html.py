@@ -241,27 +241,100 @@ const _EDGE_BATCH = (function () {
     g.quadraticCurveTo(vx, vy, et.toPoint.x, et.toPoint.y);
   }
 
+  // Device-pixel box of the curve _curveTo is about to draw. The three control points
+  // contain the quadratic, so an edge whose box misses the canvas cannot paint a pixel.
+  // `m` is the camera vis already installed on the context (world -> device).
+  function _onScreen(et, m, pad, w, h) {
+    const o = et.options && et.options.smooth;
+    let cx = et.toPoint.x, cy = et.toPoint.y;
+    if (o && o.enabled !== false && o.type === 'continuous') {
+      const fx = et.from.x, fy = et.from.y, tx = et.to.x, ty = et.to.y;
+      const e = o.roundness, C = Math.abs(fx - tx), I = Math.abs(fy - ty);
+      let a = (C <= I) ? e * I : e * C;
+      let b = a;
+      if (fx > tx) a = -a;
+      if (fy >= ty) b = -b;
+      cx = fx + a; cy = fy + b;
+      if (C <= I) cx = (fx <= tx) ? (tx < cx ? tx : cx) : (tx > cx ? tx : cx);
+      else cy = (fy >= ty) ? (ty > cy ? ty : cy) : (ty < cy ? ty : cy);
+    }
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    const xs = [et.fromPoint.x, cx, et.toPoint.x];
+    const ys = [et.fromPoint.y, cy, et.toPoint.y];
+    for (let k = 0; k < 3; k++) {
+      const dx = m.a * xs[k] + m.c * ys[k] + m.e;
+      const dy = m.b * xs[k] + m.d * ys[k] + m.f;
+      if (dx < minX) minX = dx;
+      if (dy < minY) minY = dy;
+      if (dx > maxX) maxX = dx;
+      if (dy > maxY) maxY = dy;
+    }
+    return maxX >= -pad && minX <= w + pad && maxY >= -pad && minY <= h + pad;
+  }
+
   function _drawAll(g) {
     const groups = _groups;
     if (!groups || !g) return;
     const floor = 0.3 / _scale();
+    let m = null;
+    try { m = g.getTransform(); } catch (err) { m = null; }
+    // Identity means the camera is not on the context. Culling against it would drop
+    // every edge whose world coordinate sits outside the canvas, so draw them all.
+    const ident = m && Math.abs(m.a - 1) < 1e-3 && Math.abs(m.d - 1) < 1e-3
+      && Math.abs(m.b) < 1e-3 && Math.abs(m.c) < 1e-3
+      && Math.abs(m.e) < 1e-3 && Math.abs(m.f) < 1e-3;
+    const canCull = !!(m && !ident);
+    const w = g.canvas.width, h = g.canvas.height;
+    const masks = new Array(groups.length);
+    let total = 0, shown = 0;
     for (let i = 0; i < groups.length; i++) {
-      const grp = groups[i];
-      const ets = grp.ets;
-      g.strokeStyle = grp.col;
-      // vis sets lineWidth to max(width, 0.3/scale) on every draw; the floor moves with
-      // the zoom, so it has to be re-derived per frame rather than baked in at dragStart.
-      g.lineWidth = Math.max(grp.baseW, floor);
-      g.beginPath();
+      const ets = groups[i].ets;
+      const mask = masks[i] = new Uint8Array(ets.length);
+      const lw = Math.max(groups[i].baseW, floor);
+      const pad = canCull ? (lw * Math.hypot(m.a, m.b) + 4) : 0;
       for (let j = 0; j < ets.length; j++) {
         const et = ets[j];
         // An arrowed edge is drawn by vis (it needs the arrowhead); the group keeps it so
         // the arrow flag can be flipped on the instance without a rebuild.
         if (_arrowed(et)) continue;
-        g.moveTo(et.fromPoint.x, et.fromPoint.y);
-        _curveTo(g, et);
+        total++;
+        if (!canCull || _onScreen(et, m, pad, w, h)) { mask[j] = 1; shown++; }
       }
-      g.stroke();
+    }
+    // One path per colour is cheaper while that path is the screen (the fit view).
+    // Zoomed in, the same path covers the whole graph, so the rasterizer walks every
+    // off-screen curve. Stroke each visible edge on its own: a miss is then one small
+    // path the canvas can reject, which is how the shipped viewer stays cheap up close.
+    const perEdge = total > 0 && shown * 2 < total;
+    for (let i = 0; i < groups.length; i++) {
+      const grp = groups[i];
+      const ets = grp.ets;
+      const mask = masks[i];
+      g.strokeStyle = grp.col;
+      // vis sets lineWidth to max(width, 0.3/scale) on every draw; the floor moves with
+      // the zoom, so it has to be re-derived per frame rather than baked in at dragStart.
+      g.lineWidth = Math.max(grp.baseW, floor);
+      if (perEdge) {
+        for (let j = 0; j < ets.length; j++) {
+          if (!mask[j]) continue;
+          const et = ets[j];
+          g.beginPath();
+          g.moveTo(et.fromPoint.x, et.fromPoint.y);
+          _curveTo(g, et);
+          g.stroke();
+        }
+      } else {
+        g.beginPath();
+        let any = false;
+        for (let j = 0; j < ets.length; j++) {
+          if (!mask[j]) continue;
+          any = true;
+          const et = ets[j];
+          g.moveTo(et.fromPoint.x, et.fromPoint.y);
+          _curveTo(g, et);
+        }
+        if (any) g.stroke();
+      }
     }
   }
 

@@ -17,6 +17,7 @@ const FILES = (process.argv.includes('--files')
   ? process.argv[process.argv.indexOf('--files') + 1].split(',')
   : ['view/before.html', 'view/after.html', 'view/after-traced.html']);
 const DPR = Number(process.argv.includes('--dpr') ? process.argv[process.argv.indexOf('--dpr') + 1] : '1');
+const KEEP_HIDE = process.argv.includes('--keep-hide');
 
 const srv = http.createServer((req, res) => {
   const p = path.join(LAB, decodeURIComponent(req.url.split('?')[0]));
@@ -66,10 +67,12 @@ async function measure(file) {
   }, null, { timeout: 180000 }).catch(() => {});
   await page.waitForTimeout(800);
 
-  const ready = await page.evaluate(() => {
-    try {
-      network.setOptions({ interaction: { hideEdgesOnDrag: false, hideEdgesOnZoom: false } });
-    } catch (e) {}
+  const ready = await page.evaluate((keepHide) => {
+    if (!keepHide) {
+      try {
+        network.setOptions({ interaction: { hideEdgesOnDrag: false, hideEdgesOnZoom: false } });
+      } catch (e) {}
+    }
     const opt = (network.interactionHandler && network.interactionHandler.options) || {};
     return {
       hover: opt.hover,
@@ -79,7 +82,7 @@ async function measure(file) {
       nodes: Object.keys(network.body.nodes).length,
       edges: Object.keys(network.body.edges).length,
     };
-  });
+  }, KEEP_HIDE);
 
   async function geometry(tag) {
     return page.evaluate((tagName) => {

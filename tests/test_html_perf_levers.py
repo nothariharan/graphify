@@ -286,6 +286,17 @@ def test_edge_batch_width_is_rederived_per_frame(tmp_path):
     assert "g.lineWidth = Math.max(grp.baseW, floor);" in html
 
 
+def test_edge_batch_drops_curves_that_miss_the_screen(tmp_path):
+    """Zoomed in, one path per colour covers the whole graph and the rasterizer walks
+    every off-screen curve. Edges whose control-point box misses the canvas are left
+    out, and once most edges miss, the ones that remain are stroked one each so a miss
+    is a small path. The fit view still batches, because there almost every edge hits."""
+    html, _ = _render(tmp_path, 900, 3)
+    assert "function _onScreen(et, m, pad, w, h) {" in html
+    assert "const perEdge = total > 0 && shown * 2 < total;" in html
+    assert "if (!canCull || _onScreen(et, m, pad, w, h)) { mask[j] = 1; shown++; }" in html
+
+
 def test_edge_batch_draws_the_resting_curve(tmp_path):
     """Straight lines are cheaper but they are a visibly different graph in motion: the
     frame-by-frame pixel diff against the resting frame changed 82-100% of painted pixels
