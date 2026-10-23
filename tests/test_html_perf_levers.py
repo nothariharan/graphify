@@ -147,7 +147,7 @@ def test_node_disc_is_drawn_without_the_border_stroke(tmp_path):
     assert "if (_BORDER_FULL / (scale || 1) < base) {" in html
     assert "size = base * 2; bw = 0;" in html
     assert "size = base; bw = _BORDER_FULL;" in html
-    assert "if (!force && n.__nbSize === size && n.__nbBw === bw) return;" in html
+    assert "if (!force && n.__nbSize === size && n.__nbBw === bw && n.baseSize === size) return;" in html
     assert "n.options.size = size;" in html
     assert "n.options.borderWidth = bw;" in html
 
@@ -169,7 +169,13 @@ def test_node_disc_follows_the_zoom_but_not_the_solver(tmp_path):
     html, _ = _render(tmp_path, 900, 3)
     assert "network.on('beforeDrawing', function () {" in html
     assert "if (network.physics && network.physics.options.enabled) return;" in html
-    assert "network.on('stabilizationIterationsDone', function () { _nbApply(true); });" in html
+    assert "network.on('stabilizationIterationsDone', function () { _nbApply(true); _nbLock = true; });" in html
+    assert "if (!_nbLock) { _nbApply(false); _nbLock = true; }" in html
+    # A drag updates the DataSet, and vis setValueRange then writes the constructed
+    # radius back onto every node. The paint puts the resting disc back; it does
+    # not recompute the size from the scale.
+    assert "function _nbRestore()" in html
+    assert "n.baseSize = n.__nbRestSize;" in html
 
 
 def test_gestures_do_not_resize_the_disc(tmp_path):

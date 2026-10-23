@@ -272,10 +272,38 @@ const _EDGE_BATCH = (function () {
     return maxX >= -pad && minX <= w + pad && maxY >= -pad && minY <= h + pad;
   }
 
+  function _strokeGroup(g, grp, floor) {
+    const ets = grp.ets;
+    g.strokeStyle = grp.col;
+    // vis sets lineWidth to max(width, 0.3/scale) on every draw; the floor moves with
+    // the zoom, so it has to be re-derived per frame rather than baked in at dragStart.
+    g.lineWidth = Math.max(grp.baseW, floor);
+    g.beginPath();
+    for (let j = 0; j < ets.length; j++) {
+      const et = ets[j];
+      // An arrowed edge is drawn by vis (it needs the arrowhead); the group keeps it so
+      // the arrow flag can be flipped on the instance without a rebuild.
+      if (_arrowed(et)) continue;
+      g.moveTo(et.fromPoint.x, et.fromPoint.y);
+      _curveTo(g, et);
+    }
+    g.stroke();
+  }
+
   function _drawAll(g) {
     const groups = _groups;
     if (!groups || !g) return;
     const floor = 0.3 / _scale();
+    // The solver redraws while it runs. Culling and per-edge strokes are for a settled
+    // camera; during the solve they turn four overview frames into a full walk of every
+    // edge and the first open goes from a few seconds to the tens. One path per colour,
+    // every edge, until physics is off.
+    let solving = false;
+    try { solving = !!(network.physics && network.physics.options.enabled); } catch (err) {}
+    if (solving) {
+      for (let i = 0; i < groups.length; i++) _strokeGroup(g, groups[i], floor);
+      return;
+    }
     let m = null;
     try { m = g.getTransform(); } catch (err) { m = null; }
     // Identity means the camera is not on the context. Culling against it would drop
@@ -311,8 +339,6 @@ const _EDGE_BATCH = (function () {
       const ets = grp.ets;
       const mask = masks[i];
       g.strokeStyle = grp.col;
-      // vis sets lineWidth to max(width, 0.3/scale) on every draw; the floor moves with
-      // the zoom, so it has to be re-derived per frame rather than baked in at dragStart.
       g.lineWidth = Math.max(grp.baseW, floor);
       if (perEdge) {
         for (let j = 0; j < ets.length; j++) {
@@ -433,7 +459,7 @@ const _EDGE_BATCH = (function () {
 // and, crucially, it happens ONCE per node per crossing. The earlier version recomputed
 // `size = base + min(base, 1.5/scale)` on every zoom frame, which rewrote the size of all
 // 1886 nodes per frame and made the dots shimmer and the zoom hitch.
-let _nbBase = null, _nbHover = {}, _nbSel = {}, _nbScale = -1;
+let _nbBase = null, _nbHover = {}, _nbSel = {}, _nbScale = -1, _nbLock = false;
 function _nbApplyNode(id, scale, force) {
   const n = network.body && network.body.nodes[id];
   if (!n || !n.options) return;
@@ -443,6 +469,12 @@ function _nbApplyNode(id, scale, force) {
   if (_nbHover[id] || _nbSel[id]) {
     // hovered/selected: the border is white and visible, so keep a real one
     size = base; bw = _BORDER_FULL;
+  } else if (_nbLock && n.__nbRestSize !== undefined) {
+    // Panning does not change the scale, but the first drag frame used to apply a
+    // scale the zoom had already reached. Every disc then jumped from the doubled
+    // fill to the thin-border size and stayed there. The resting size is fixed
+    // once, and a gesture puts it back.
+    size = n.__nbRestSize; bw = n.__nbRestBw;
   } else if (_BORDER_FULL / (scale || 1) < base) {
     // the border is thinner than the node: use vis's own border
     size = base; bw = _BORDER_FULL;
@@ -454,11 +486,35 @@ function _nbApplyNode(id, scale, force) {
   // faster). That is exactly what made the nodes visibly shrink every time the graph moved
   // or zoomed, so the size is the same in a gesture as at rest. The lean still suppresses
   // the hover paint, which is all it should have been doing here.
-  if (!force && n.__nbSize === size && n.__nbBw === bw) return;
+  if (!force && n.__nbSize === size && n.__nbBw === bw && n.baseSize === size) return;
   n.__nbSize = size;
   n.__nbBw = bw;
+  if (!_nbHover[id] && !_nbSel[id]) {
+    n.__nbRestSize = size;
+    n.__nbRestBw = bw;
+    // vis keeps the constructed radius on baseSize and writes it back over
+    // options.size whenever the DataSet emits _dataUpdated (setValueRange).
+    // A drag does that on every move, which snapped every disc back to the
+    // exported radius. The resting radius has to be what vis restores.
+    n.baseSize = size;
+  }
   n.options.size = size;
   n.options.borderWidth = bw;
+}
+function _nbRestore() {
+  const nodes = network.body && network.body.nodes;
+  if (!nodes) return;
+  for (const id in nodes) {
+    if (_nbHover[id] || _nbSel[id]) continue;
+    const n = nodes[id];
+    if (!n || !n.options || n.__nbRestSize === undefined) continue;
+    if (n.options.size === n.__nbRestSize && n.options.borderWidth === n.__nbRestBw && n.baseSize === n.__nbRestSize) continue;
+    n.__nbSize = n.__nbRestSize;
+    n.__nbBw = n.__nbRestBw;
+    n.baseSize = n.__nbRestSize;
+    n.options.size = n.__nbRestSize;
+    n.options.borderWidth = n.__nbRestBw;
+  }
 }
 function _nbApply(force) {
   const nodes = network.body && network.body.nodes;
@@ -485,9 +541,16 @@ network.on('deselectNode', function (p) { p.nodes.forEach(function (id) { delete
 // see the sizes the exporter shipped, or the picture would differ from the unbaked one.
 network.on('beforeDrawing', function () {
   try { if (network.physics && network.physics.options.enabled) return; } catch (e) {}
-  _nbApply(false);
+  // The scale is applied once. Re-reading it on later frames is what made the
+  // dots shimmer while zooming, so a locked disc is not recomputed.
+  if (!_nbLock) { _nbApply(false); _nbLock = true; }
+  // Putting the radius back is not a recompute. Dragging writes x/y through the
+  // DataSet, and vis answers that with setValueRange, which sets EVERY node's
+  // size back to the radius it was built with. That is the shrink (and the dimmer
+  // cluster) the moment the graph moves. The paint has to see the resting disc.
+  _nbRestore();
 });
-network.on('stabilizationIterationsDone', function () { _nbApply(true); });
+network.on('stabilizationIterationsDone', function () { _nbApply(true); _nbLock = true; });
 // One batched edge pass per frame: afterDrawing fires once per vis draw.
 network.on('afterDrawing', function () { _EDGE_BATCH.frame(); });
 // L12 (#perf): the batched pass is cheaper than one stroke per edge, so on dense graphs
@@ -963,7 +1026,7 @@ const network = new vis.Network(container, {{ nodes: nodesDS, edges: edgesDS }},
       damping: 0.4,
       avoidOverlap: 0.8,
     }},
-    stabilization: {{ iterations: {stab_iters}, fit: true }},
+    stabilization: {{ iterations: {stab_iters}, updateInterval: {stab_iters}, fit: true }},
   }},
   interaction: {{
     hover: {_hover_enabled},
