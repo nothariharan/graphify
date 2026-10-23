@@ -4702,8 +4702,53 @@ def dispatch_command(cmd: str) -> None:
         # (llm._stamp_semantic_origin); cache entries from before it do not.
         from graphify.llm import _stamp_semantic_origin as _stamp_sem
         _stamp_sem(sem_result)
+        # Merge AST + semantic + pg_result + cargo_result. Dedup by id with
+        # provenance awareness: an AST node (source-backed, from tree-sitter)
+        # must not lose to a richer sourceless semantic stub that happens to
+        # share its id (#4365, CONTRIBUTING.md invariant #2). Keep the AST
+        # node and only fill fields the AST side left empty from the semantic
+        # side, so richer labels still land without erasing source attribution.
+        # Semantic nodes with an id not present in AST are appended as before.
+        merged_nodes = [dict(n) for n in ast_result.get("nodes", [])]
+        ast_by_id = {n.get("id"): n for n in merged_nodes if n.get("id") is not None}
+        for n in sem_result.get("nodes", []):
+            nid = n.get("id")
+            if nid is not None and nid in ast_by_id:
+                kept = ast_by_id[nid]
+                # Fill only empty fields from the semantic side, so richer labels
+                # land without erasing the AST record's source attribution
+                # (invariant #2 in CONTRIBUTING.md).
+                for k, v in n.items():
+                    if k == "id":
+                        continue
+                    if kept.get(k) in (None, "", [], {}):
+                        kept[k] = v
+                # Surface a genuine provenance conflict instead of resolving it
+                # silently by insertion order: both sides carry a source_file and
+                # they disagree.
+                ksf = kept.get("source_file")
+                nsf = n.get("source_file")
+                if isinstance(ksf, str) and ksf.strip() and isinstance(nsf, str) and nsf.strip() and ksf != nsf:
+                    print(
+                        f"[graphify extract] note: node id {nid!r} collided between "
+                        f"AST ({ksf}) and semantic ({nsf}); kept the AST record."
+                    )
+            else:
+                merged_nodes.append(dict(n))
+        for r in (pg_result, cargo_result):
+            for n in r.get("nodes", []):
+                nid = n.get("id")
+                if nid is not None and nid in ast_by_id:
+                    kept = ast_by_id[nid]
+                    for k, v in n.items():
+                        if k == "id":
+                            continue
+                        if kept.get(k) in (None, "", [], {}):
+                            kept[k] = v
+                else:
+                    merged_nodes.append(dict(n))
         merged: dict = {
-            "nodes": list(ast_result.get("nodes", [])) + list(sem_result.get("nodes", [])) + list(pg_result.get("nodes", [])) + list(cargo_result.get("nodes", [])),
+            "nodes": merged_nodes,
             "edges": list(ast_result.get("edges", [])) + list(sem_result.get("edges", [])) + list(pg_result.get("edges", [])) + list(cargo_result.get("edges", [])),
             "hyperedges": list(sem_result.get("hyperedges", [])),
             "input_tokens": ast_result.get("input_tokens", 0) + sem_result.get("input_tokens", 0),

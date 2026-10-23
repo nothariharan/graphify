@@ -46,7 +46,11 @@ _MTIME_COARSE_S = 2.0
 _MTIME_SUBSECOND_S = 0.05
 
 CODE_EXTENSIONS = {'.py', '.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs', '.ejs', '.ets', '.go', '.rs', '.vb', '.cbl', '.cob', '.cobol', '.cpy', '.java', '.groovy', '.gradle', '.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.cu', '.cuh', '.metal', '.rb', '.rake', '.swift', '.kt', '.kts', '.cs', '.scala', '.php', '.lua', '.luau', '.toc', '.zig', '.ps1', '.psm1', '.psd1', '.ex', '.exs', '.m', '.mm', '.ml', '.mli', '.jl', '.vue', '.svelte', '.astro', '.dart', '.v', '.sv', '.svh', '.vh', '.sql', '.r', '.f', '.F', '.f90', '.F90', '.f95', '.F95', '.f03', '.F03', '.f08', '.F08', '.pas', '.pp', '.dpr', '.dpk', '.lpr', '.inc', '.dfm', '.lfm', '.lpk', '.sh', '.bash', '.json', '.tf', '.tfvars', '.hcl', '.dm', '.dme', '.dmi', '.dmm', '.dmf', '.sln', '.slnx', '.csproj', '.fsproj', '.vbproj', '.xaml', '.razor', '.cshtml', '.cls', '.trigger', '.lisp', '.cl', '.lsp', '.asd', '.robot', '.resource', '.sol', '.erl', '.hrl', '.escript'}
-DOC_EXTENSIONS = {'.md', '.mdx', '.qmd', '.skill', '.txt', '.rst', '.html', '.yaml', '.yml', '.j2', '.jinja', '.jinja2'}
+DOC_EXTENSIONS = {'.md', '.mdx', '.qmd', '.skill', '.txt', '.rst', '.html', '.yaml', '.yml', '.j2', '.jinja', '.jinja2',
+                 # SAP ABAP Cloud (abapGit) + SAP CAP + adjacent BTP artifacts have no AST extractor, so route them
+                 # through the LLM semantic path instead of silently skipping them (#4365).
+                 '.abap', '.asddls', '.asdcls', '.asbdef', '.baseinfo', '.srvdsrv', '.cds',
+                 '.hdbmigrationtable', '.mtaext', '.edmx', '.properties'}
 PAPER_EXTENSIONS = {'.pdf'}
 IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'}
 OFFICE_EXTENSIONS = {'.docx', '.xlsx'}
@@ -545,11 +549,50 @@ def classify_file(path: Path) -> FileType | None:
     # Compound extensions must be checked before simple suffix lookup
     if path.name.lower().endswith(".blade.php"):
         return FileType.CODE
+    # abapGit-serialized ABAP Cloud objects use compound extensions where the
+    # final `.xml` is an ADT-metadata sidecar for the object named by the rest
+    # of the filename (e.g. `zknsf_i_ratings.ddls.xml`). Treat any compound
+    # `.xml` form as a document so the sidecar is LLM-extracted instead of
+    # silently skipped (#4365). Standalone `.xml` keeps its current (unclassified)
+    # behaviour to avoid pulling arbitrary XML into semantic extraction.
+    if path.name.lower().endswith(".xml") and path.name.count(".") >= 2:
+        return FileType.DOCUMENT
     # A project may declare what an ambiguous extension means to it
     # (.graphifyrc `language.inc=php`, #2961); classify by the declared one.
     ext = effective_suffix(path).lower()
     if not ext:
         return _shebang_file_type(path)
+    # `.json` is in CODE_EXTENSIONS and `extract_json` handles config/manifest
+    # JSON. A non-config `.json` (e.g. abapGit ATC check configs
+    # `*.chkc.json`) has no AST parser and silently produces zero nodes (#4365).
+    # Route those through the document/semantic path instead, but keep every
+    # file `extract_json` would actually handle on the CODE path so tsconfig/
+    # package.json/compound-config extraction is unchanged.
+    if ext == ".json" and not is_package_manifest_path(path):
+        from graphify.extractors.json_config import (
+            _CONFIG_JSON_NAMES, _CONFIG_JSON_KEYS, _SCHEMA_DEFINITION_KEYS,
+        )
+        name = path.name.casefold()
+        is_config = (
+            name in _CONFIG_JSON_NAMES
+            or name.endswith((".eslintrc.json", ".prettierrc.json", ".babelrc.json",
+                              "tsconfig.json", "jsconfig.json"))
+        )
+        if not is_config:
+            try:
+                import json as _json
+                with open(path, encoding="utf-8", errors="replace") as _f:
+                    _raw = _f.read(65536)
+                _obj = _json.loads(_raw)
+                if isinstance(_obj, dict):
+                    _keys = set(_obj.keys())
+                    if not ("$schema" in _keys and (_keys & _SCHEMA_DEFINITION_KEYS)):
+                        if _keys & _CONFIG_JSON_KEYS:
+                            is_config = True
+            except (OSError, ValueError, RecursionError):
+                pass
+        if not is_config:
+            return FileType.DOCUMENT
     if ext in CODE_EXTENSIONS:
         return FileType.CODE
     if ext in PAPER_EXTENSIONS:

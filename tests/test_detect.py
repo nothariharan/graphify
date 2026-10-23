@@ -146,7 +146,10 @@ def test_detect_skips_obsidian_vault_metadata_dirs(tmp_path):
 
     result = detect(tmp_path)
 
-    assert result["files"]["code"] == [
+    # Arbitrary (non-config) .json now routes through the document/semantic path
+    # instead of silently producing zero nodes (#4365), so these files land in
+    # "document" rather than "code". The obsidian metadata dirs stay skipped.
+    assert result["files"].get("document", []) == [
         str(trash_dir / "state.json"),
         str(tmp_path / "project.json"),
     ]
