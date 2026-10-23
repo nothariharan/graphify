@@ -625,4 +625,13 @@ def test_dense_arrow_reveal_never_touches_the_dataset(tmp_path):
     # suppressed while dragging, resynced once on release
     assert "if (!_dragging) _syncArrows();" in html
 
-
+def test_desync_canvas_patch_is_emitted(tmp_path):
+    """L37: the graph canvas must be created with desynchronized: true."""
+    html, _ = _render(tmp_path, 20, 1)
+    assert "HTMLCanvasElement.prototype.getContext" in html
+    assert "desynchronized: true" in html
+    patch_idx = html.find("HTMLCanvasElement.prototype.getContext")
+    vis_idx = html.find("unpkg.com/vis-network")
+    assert patch_idx != -1 and vis_idx != -1 and patch_idx < vis_idx
+    html2, _ = _render(tmp_path, 900, 3)
+    assert "desynchronized: true" in html2
