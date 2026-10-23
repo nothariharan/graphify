@@ -1,0 +1,216 @@
+{
+ "file": "variants/base-ours-v25.html",
+ "wall": 1748,
+ "before": {
+  "runtimeUsed": 14228036,
+  "runtimeTotal": 15011840,
+  "usedSize": 25558977
+ },
+ "after": {
+  "runtimeUsed": 14330556,
+  "runtimeTotal": 15011840,
+  "usedSize": 25662021
+ },
+ "deltas": [
+  {
+   "ctor": "code:system / InstructionStream",
+   "dCount": 30,
+   "dSize": 62464
+  },
+  {
+   "ctor": "code:system / TrustedByteArray",
+   "dCount": 62,
+   "dSize": 17780
+  },
+  {
+   "ctor": "code:system / FeedbackVector",
+   "dCount": 29,
+   "dSize": 5976
+  },
+  {
+   "ctor": "code:system / ProtectedFixedArray",
+   "dCount": 5,
+   "dSize": 4816
+  },
+  {
+   "ctor": "native:system / WeakArrayList",
+   "dCount": 10,
+   "dSize": 2608
+  },
+  {
+   "ctor": "code:system / Code",
+   "dCount": 30,
+   "dSize": 2160
+  },
+  {
+   "ctor": "object shape:system / DescriptorArray",
+   "dCount": 12,
+   "dSize": 1428
+  },
+  {
+   "ctor": "code:system / LoadHandler",
+   "dCount": 68,
+   "dSize": 1152
+  },
+  {
+   "ctor": "object shape:system / Map",
+   "dCount": 17,
+   "dSize": 712
+  },
+  {
+   "ctor": "code:system / BytecodeArray",
+   "dCount": 4,
+   "dSize": 688
+  },
+  {
+   "ctor": "native:system / FunctionTemplateInfo",
+   "dCount": 10,
+   "dSize": 640
+  },
+  {
+   "ctor": "native:PerformanceLongAnimationFrameTiming",
+   "dCount": 3,
+   "dSize": 528
+  },
+  {
+   "ctor": "code:system / AllocationSite",
+   "dCount": 15,
+   "dSize": 420
+  },
+  {
+   "ctor": "object:Object",
+   "dCount": 19,
+   "dSize": 380
+  },
+  {
+   "ctor": "native:system / ArrayList",
+   "dCount": 3,
+   "dSize": 332
+  },
+  {
+   "ctor": "code:system / TrustedWeakFixedArray",
+   "dCount": 5,
+   "dSize": 280
+  },
+  {
+   "ctor": "code:system / CodeWrapper",
+   "dCount": 30,
+   "dSize": 240
+  },
+  {
+   "ctor": "object shape:system / PrototypeInfo",
+   "dCount": 6,
+   "dSize": 240
+  },
+  {
+   "ctor": "code:(constant pool)",
+   "dCount": 4,
+   "dSize": 196
+  },
+  {
+   "ctor": "code:system / WeakArrayList",
+   "dCount": 6,
+   "dSize": 188
+  },
+  {
+   "ctor": "code:system / ScopeInfo",
+   "dCount": 4,
+   "dSize": 176
+  },
+  {
+   "ctor": "code:system / ObjectBoilerplateDescription",
+   "dCount": 5,
+   "dSize": 168
+  },
+  {
+   "ctor": "object shape:system / TransitionArray",
+   "dCount": 0,
+   "dSize": 168
+  },
+  {
+   "ctor": "number:heap number",
+   "dCount": 12,
+   "dSize": 144
+  },
+  {
+   "ctor": "code:system / FeedbackMetadata",
+   "dCount": 4,
+   "dSize": 128
+  },
+  {
+   "ctor": "native:system / ProtectedFixedArray",
+   "dCount": 5,
+   "dSize": 128
+  },
+  {
+   "ctor": "native:blink::HeapHashTableBacking<blink::HashTable<cppgc::internal::BasicMember<blink::FontSelectorClient, cppgc::internal::WeakMemberTag, cppgc::internal::DijkstraWriteBarrierPolicy>, cppgc::internal::BasicMember<blink::FontSelectorClient, cppgc::internal::WeakMemberTag, cppgc::internal::DijkstraWriteBarrierPolicy>, blink::IdentityExtractor, blink::HashTraits<cppgc::internal::BasicMember<blink::FontSelectorClient, cppgc::internal::WeakMemberTag, cppgc::internal::DijkstraWriteBarrierPolicy>>, blink::HashTraits<cppgc::internal::BasicMember<blink::FontSelectorClient, cppgc::internal::WeakMemberTag, cppgc::internal::DijkstraWriteBarrierPolicy>>, blink::HeapAllocator>>",
+   "dCount": 0,
+   "dSize": 128
+  },
+  {
+   "ctor": "object shape:system / WeakArrayList",
+   "dCount": 4,
+   "dSize": 112
+  },
+  {
+   "ctor": "native:system / AccessorPair",
+   "dCount": 9,
+   "dSize": 108
+  },
+  {
+   "ctor": "native:system / ExternalStringData",
+   "dCount": 3,
+   "dSize": 84
+  },
+  {
+   "ctor": "native:system / PropertyArray",
+   "dCount": 3,
+   "dSize": 68
+  },
+  {
+   "ctor": "code:system / StoreHandler",
+   "dCount": 3,
+   "dSize": 60
+  },
+  {
+   "ctor": "native:system / ObjectTemplateInfo",
+   "dCount": 2,
+   "dSize": 56
+  },
+  {
+   "ctor": "string:rgba(89,161,79,0.35)",
+   "dCount": 1,
+   "dSize": 52
+  },
+  {
+   "ctor": "string:rgba(225,87,89,0.35)",
+   "dCount": 1,
+   "dSize": 52
+  },
+  {
+   "ctor": "code:system / SharedFunctionInfo / WheelEvent",
+   "dCount": 1,
+   "dSize": 48
+  },
+  {
+   "ctor": "native:system / FunctionTemplateRareData",
+   "dCount": 1,
+   "dSize": 40
+  },
+  {
+   "ctor": "native:system / SharedFunctionInfoWrapper",
+   "dCount": 5,
+   "dSize": 40
+  },
+  {
+   "ctor": "string:zoomStep",
+   "dCount": 0,
+   "dSize": 32
+  },
+  {
+   "ctor": "code:system / BytecodeWrapper",
+   "dCount": 4,
+   "dSize": 32
+  }
+ ]
+}

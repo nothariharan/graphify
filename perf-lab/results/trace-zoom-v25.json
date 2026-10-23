@@ -1,0 +1,82 @@
+{
+ "file": "variants/base-ours-v25.html",
+ "wall": 1584,
+ "phases": {
+  "script": 2642206,
+  "style": 0,
+  "layout": 0,
+  "paint": 0,
+  "raster": 0,
+  "other": 1347671
+ },
+ "frames": 0,
+ "lat": [],
+ "cpu": [
+  [
+   "(idle)",
+   1265.211
+  ],
+  [
+   "(program)",
+   335.26
+  ],
+  [
+   "value @ vis-network.min.js",
+   152.06199999999998
+  ],
+  [
+   "_arrowed @ base-ours-v25.html",
+   25.413
+  ],
+  [
+   "_nbApplyNode @ base-ours-v25.html",
+   18.919
+  ],
+  [
+   "setLineDash",
+   9.469
+  ],
+  [
+   "stroke",
+   8.152
+  ],
+  [
+   "save",
+   7.397
+  ],
+  [
+   "(garbage collector)",
+   6.976
+  ],
+  [
+   "Ym @ vis-network.min.js",
+   5.94
+  ],
+  [
+   "_curveTo @ base-ours-v25.html",
+   5.416
+  ],
+  [
+   "quadraticCurveTo",
+   5.209
+  ],
+  [
+   "moveTo",
+   4.373
+  ],
+  [
+   "restore",
+   3.2190000000000003
+  ]
+ ],
+ "stacks": [
+  [
+   "HZ.eval (eval at evaluate (:370:30), <anonymous>:17:20) | t.emit (23927) | g.value (293056) | 291702",
+   16
+  ],
+  [
+   "HZ.eval (eval at evaluate (:370:30), <anonymous>:17:20) | t.emit (23927) | g.value (293056) | g.value (291501) | HZ.redraw (642760) | _syncArrows (32) | HZ.<anonymous> (77) | t.emit (23927) | g.value (387110) | g.value (388007)",
+   1
+  ]
+ ]
+}

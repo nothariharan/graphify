@@ -470,3 +470,17 @@ WITHIN a variant (redraw_min and load_ms remain valid across all rows).
 ## Blockers
 - gsoc 104k base is 131MB; never fully loaded headful. L5 needs a culling/aggregate prototype.
 - Interaction fps confounded by layout; certify with redraw_min + fixed camera.
+
+
+2026-10-23 (L38 trace & heap audit — observation only, no fix):
+Nine instruments run on variants/base-ours-v25.html (the desync build, 6b46384b): probe_inp,
+probe_zoom_trace, probe_profile_frame, probe_frame_attrib, probe_path_extent, probe_raster_flush,
+probe_raster_micro, probe_lag_hunt, and the new probe_heap_trace (CDP HeapProfiler snapshots with
+forced GC). Result: the lag is the GPU/compositor raster of the canvas layer, not our JS (~13 ms
+draw; 0 of 26 bad frames were JS) and not memory (heap +0.10-0.16 MB over 14-100 gestures, all
+V8 JIT internals). Each frame draws 10.77 M device-space px of path (3876 subpaths + 393 dashed +
+24 nodes); the forced raster is ~154 ms. desync (L37) already cut presentation 3x (166 -> 47-94 ms)
+but tail frames still hit 100-132 ms. Dashed edges are the per-path expensive raster case
+(20 dashed paths = 20.7 ms vs 3876 solid = 2.1 ms). No code change, no artifact rebuild, no fix.
+Candidate levers (dash raster cost, devicePixelRatio, OffscreenCanvas+worker, accept the floor) are
+listed in lanes/L38-trace-and-heap.md for the user direction. 43/43 tests green. Lock free.
