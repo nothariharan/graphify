@@ -405,8 +405,8 @@ function _nbApply(force) {
 function _nbScaleNow() {{ let s = 1; try {{ s = network.body.view.scale || 1; }} catch (e) {{}} return s; }}
 network.on('hoverNode', function (p) { _nbHover[p.node] = 1; _nbApplyNode(p.node, _nbScaleNow(), true); });
 network.on('blurNode', function (p) { delete _nbHover[p.node]; _nbApplyNode(p.node, _nbScaleNow(), true); });
-network.on('selectNode', function (p) { p.nodes.forEach(function (id) { _nbSel[id] = 1; _nbApplyNode(id, _nbScaleNow(), true); }); });
-network.on('deselectNode', function (p) { p.nodes.forEach(function (id) { delete _nbSel[id]; _nbApplyNode(id, _nbScaleNow(), true); }); });
+network.on('selectNode', function (p) { p.nodes.forEach(function (id) { _nbSel[id] = 1; _nbApplyNode(id, _nbScaleNow(), true); }); if (!_dragging) _syncArrows(); });
+network.on('deselectNode', function (p) { p.nodes.forEach(function (id) { delete _nbSel[id]; _nbApplyNode(id, _nbScaleNow(), true); }); if (!_dragging) _syncArrows(); });
 // The size follows the zoom (the border it replaces was a screen-constant width), so it
 // is refreshed when the scale changes. Not while the solver is running: the layout must
 // see the sizes the exporter shipped, or the picture would differ from the unbaked one.
@@ -820,10 +820,12 @@ def _html_script(nodes_json: str, edges_json: str, legend_json: str,
                  defer_arrows: bool = False,
                  lean_gestures: bool = False,
                  baked: bool = False,
+                 hover_enabled: bool = True,
                  community_colour_json: str = "{}") -> str:
     # Arrowheads are deferred to hover only on dense graphs (see
     # ARROW_DEFER_EDGE_THRESHOLD); otherwise emitted exactly as before.
     _arrow_default = "false" if defer_arrows else "true, scaleFactor: 0.5"
+    _hover_enabled = "true" if hover_enabled else "false"
     # Pre-baked positions (#perf L10): when the graph ships stabilized x/y,
     # skip the on-load solver entirely (physics off, no stabilization pass).
     physics_enabled = "false" if baked else "true"
@@ -891,7 +893,7 @@ const network = new vis.Network(container, {{ nodes: nodesDS, edges: edgesDS }},
     stabilization: {{ iterations: {stab_iters}, fit: true }},
   }},
   interaction: {{
-    hover: true,
+    hover: {_hover_enabled},
     tooltipDelay: 100,
     navigationButtons: false,
     keyboard: false,
@@ -1730,7 +1732,7 @@ def to_html(
   </div>
   <div id="stats">{stats}</div>
 </div>
-{_html_script(nodes_json, edges_json, legend_json, defer_arrows=G.number_of_edges() > ARROW_DEFER_EDGE_THRESHOLD, lean_gestures=G.number_of_nodes() > LEAN_GESTURE_NODE_THRESHOLD, baked=_baked_all, community_colour_json=json.dumps(community_colour))}
+{_html_script(nodes_json, edges_json, legend_json, defer_arrows=G.number_of_edges() > ARROW_DEFER_EDGE_THRESHOLD, lean_gestures=G.number_of_nodes() > LEAN_GESTURE_NODE_THRESHOLD, baked=_baked_all, hover_enabled=not (G.number_of_edges() > ARROW_DEFER_EDGE_THRESHOLD), community_colour_json=json.dumps(community_colour))}
 {_hyperedge_script(hyperedges_json)}
 </body>
 </html>"""

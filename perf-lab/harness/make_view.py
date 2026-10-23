@@ -31,6 +31,6 @@ localize(os.path.join(LAB, "variants", "base-official-v8.html"),
          os.path.join(VIEW, "before.html"), "OFFICIAL graphify (safishamsi/graphify v8 @ 847a93f3)")
 localize(os.path.join(LAB, "variants", "base-maincheckout.html"),
          os.path.join(VIEW, "before-your-checkout.html"), "your checkout (3a09ba73)")
-localize(os.path.join(LAB, "variants", "base-ours-v25.html"),
+localize(os.path.join(LAB, "variants", "base-ours-v26.html"),
          os.path.join(VIEW, "after.html"), "OURS (v25: desynchronized canvas, ~3x lower presentation delay)")
 print("wrote", VIEW)
