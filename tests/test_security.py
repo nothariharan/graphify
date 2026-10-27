@@ -541,3 +541,8 @@ def test_redact_secrets_does_not_mangle_hashes_and_ids():
         "class AkiaConfigProvider implements Provider",
     ):
         assert redact_secrets(benign) == benign, benign
+
+
+def test_sanitize_label_caps_at_exactly_256_chars():
+    assert sanitize_label("a" * 256) == "a" * 256
+    assert sanitize_label("a" * 257) == "a" * 256
