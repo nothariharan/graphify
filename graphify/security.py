@@ -355,9 +355,10 @@ def validate_graph_path(path: str | Path, base: Path | None = None) -> Path:
         )
 
     resolved = Path(path).resolve()
-    try:
-        resolved.relative_to(base)
-    except ValueError:
+    # Compare normalised strings instead of relying on relative_to raising:
+    # normcase folds drive-letter and separator case on Windows, where
+    # relative_to rejected C:\Repo\graphify-out vs c:\repo\graphify-out.
+    if not os.path.normcase(str(resolved)).startswith(os.path.normcase(str(base))):
         raise ValueError(
             f"Path {path!r} escapes the allowed directory {base}. "
             "Only paths inside graphify-out/ are permitted."
