@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import ipaddress
+import math
 import socket
 
 from graphify.paths import GRAPHIFY_OUT, GRAPHIFY_OUT_NAME
@@ -60,7 +61,7 @@ def _max_graph_file_bytes() -> int:
         value = float(text)
     except ValueError:
         return _MAX_GRAPH_FILE_BYTES
-    if value <= 0:
+    if not math.isfinite(value) or value <= 0:
         return _MAX_GRAPH_FILE_BYTES
     return int(value * multiplier)
 

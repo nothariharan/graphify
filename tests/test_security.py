@@ -551,3 +551,9 @@ def test_redact_secrets_does_not_mangle_hashes_and_ids():
         "class AkiaConfigProvider implements Provider",
     ):
         assert redact_secrets(benign) == benign, benign
+
+
+@pytest.mark.parametrize("special", ["inf", "nan", "-inf", "infGB"])
+def test_max_graph_bytes_non_finite_falls_back(monkeypatch, special):
+    monkeypatch.setenv("GRAPHIFY_MAX_GRAPH_BYTES", special)
+    assert _max_graph_file_bytes() == _MAX_GRAPH_FILE_BYTES
