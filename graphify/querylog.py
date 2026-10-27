@@ -21,6 +21,8 @@ def _log_path() -> Path | None:
     #   GRAPHIFY_QUERY_LOG=<path>   log to that path, or
     #   GRAPHIFY_QUERY_LOG_ENABLE=1 log to ~/.cache/graphify-queries.log.
     # GRAPHIFY_QUERY_LOG_DISABLE=1 still forces it off (back-compat, wins).
+    # The file rotates at GRAPHIFY_QUERY_LOG_MAX_BYTES (default 10 MiB),
+    # keeping GRAPHIFY_QUERY_LOG_BACKUPS old files (default 3).
     if os.environ.get("GRAPHIFY_QUERY_LOG_DISABLE", "").lower() in ("1", "true", "yes"):
         return None
     override = os.environ.get("GRAPHIFY_QUERY_LOG", "").strip()
@@ -29,6 +31,61 @@ def _log_path() -> Path | None:
     if os.environ.get("GRAPHIFY_QUERY_LOG_ENABLE", "").lower() in ("1", "true", "yes"):
         return Path.home() / ".cache" / "graphify-queries.log"
     return None
+
+
+_DEFAULT_MAX_BYTES = 10 * 1024 * 1024
+_DEFAULT_BACKUPS = 3
+
+
+def _max_log_bytes() -> int:
+    """Size at which the log rotates. ``GRAPHIFY_QUERY_LOG_MAX_BYTES=0`` disables rotation."""
+    raw = os.environ.get("GRAPHIFY_QUERY_LOG_MAX_BYTES", "").strip()
+    if not raw:
+        return _DEFAULT_MAX_BYTES
+    return int(raw)
+
+
+def _backup_count() -> int:
+    raw = os.environ.get("GRAPHIFY_QUERY_LOG_BACKUPS", "").strip()
+    if not raw:
+        return _DEFAULT_BACKUPS
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return _DEFAULT_BACKUPS
+
+
+def _backup_path(path: Path, index: int) -> Path:
+    return path.with_name(f"{path.name}.{index}")
+
+
+def _rotate_if_needed(path: Path, incoming: int) -> None:
+    """Rotate *path* to ``path.1`` .. ``path.N`` when the next write would exceed the cap.
+
+    The newest backup is always ``.1``; the oldest beyond ``GRAPHIFY_QUERY_LOG_BACKUPS``
+    is dropped.
+    """
+    limit = _max_log_bytes()
+    if limit <= 0:
+        return
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return
+    if size + incoming <= limit:
+        return
+    backups = _backup_count()
+    if backups == 0:
+        path.unlink()
+        return
+    oldest = _backup_path(path, backups)
+    if oldest.exists():
+        oldest.unlink()
+    for index in range(1, backups):
+        src = _backup_path(path, index)
+        if src.exists():
+            os.replace(src, _backup_path(path, index + 1))
+    os.replace(path, _backup_path(path, 1))
 
 
 def _log_responses() -> bool:
@@ -73,8 +130,10 @@ def log_query(
                 rec[k] = v
         if result is not None and _log_responses():
             rec["response"] = result
+        line = json.dumps(rec, ensure_ascii=False) + "\n"
         path.parent.mkdir(parents=True, exist_ok=True)
+        _rotate_if_needed(path, len(line.encode("utf-8")))
         with path.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            fh.write(line)
     except Exception:
         pass
