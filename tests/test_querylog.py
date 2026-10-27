@@ -221,3 +221,61 @@ def test_log_query_writes_nothing_by_default(monkeypatch, tmp_path):
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
     log_query(kind="query", question="secret internal ticket TICKET-123", corpus=".", result="1 node found")
     assert not (tmp_path / ".cache" / "graphify-queries.log").exists()
+
+
+# ---------------------------------------------------------------------------
+# log_query — size-based rotation
+# ---------------------------------------------------------------------------
+
+def _enable_log(monkeypatch, log_file, max_bytes, backups=None):
+    monkeypatch.setenv("GRAPHIFY_QUERY_LOG", str(log_file))
+    monkeypatch.delenv("GRAPHIFY_QUERY_LOG_DISABLE", raising=False)
+    monkeypatch.setenv("GRAPHIFY_QUERY_LOG_MAX_BYTES", str(max_bytes))
+    if backups is not None:
+        monkeypatch.setenv("GRAPHIFY_QUERY_LOG_BACKUPS", str(backups))
+
+
+def test_rotation_moves_full_log_to_first_backup(tmp_path, monkeypatch):
+    log_file = tmp_path / "q.log"
+    _enable_log(monkeypatch, log_file, max_bytes=200)
+    log_file.write_text("x" * 190 + "\n", encoding="utf-8")
+
+    log_query(kind="query", question="next", corpus="g.json")
+
+    assert (tmp_path / "q.log.1").read_text(encoding="utf-8").startswith("x" * 190)
+    rec = json.loads(log_file.read_text(encoding="utf-8").strip())
+    assert rec["question"] == "next"
+
+
+def test_rotation_disabled_with_zero(tmp_path, monkeypatch):
+    log_file = tmp_path / "q.log"
+    _enable_log(monkeypatch, log_file, max_bytes=0)
+    log_file.write_text("x" * 5000 + "\n", encoding="utf-8")
+
+    log_query(kind="query", question="next", corpus="g.json")
+
+    assert not (tmp_path / "q.log.1").exists()
+    assert log_file.read_text(encoding="utf-8").startswith("x" * 5000)
+
+
+def test_rotation_with_zero_backups_truncates(tmp_path, monkeypatch):
+    log_file = tmp_path / "q.log"
+    _enable_log(monkeypatch, log_file, max_bytes=100, backups=0)
+    log_file.write_text("x" * 99 + "\n", encoding="utf-8")
+
+    log_query(kind="query", question="next", corpus="g.json")
+
+    assert not (tmp_path / "q.log.1").exists()
+    assert len(log_file.read_text(encoding="utf-8").splitlines()) == 1
+
+
+def test_rotation_drops_backups_beyond_limit(tmp_path, monkeypatch):
+    log_file = tmp_path / "q.log"
+    _enable_log(monkeypatch, log_file, max_bytes=100, backups=1)
+    (tmp_path / "q.log.1").write_text("old\n", encoding="utf-8")
+    log_file.write_text("x" * 99 + "\n", encoding="utf-8")
+
+    log_query(kind="query", question="next", corpus="g.json")
+
+    assert (tmp_path / "q.log.1").read_text(encoding="utf-8").startswith("x" * 99)
+    assert not (tmp_path / "q.log.2").exists()
