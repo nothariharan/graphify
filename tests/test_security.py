@@ -541,3 +541,28 @@ def test_redact_secrets_does_not_mangle_hashes_and_ids():
         "class AkiaConfigProvider implements Provider",
     ):
         assert redact_secrets(benign) == benign, benign
+
+
+# ---------------------------------------------------------------------------
+# GRAPHIFY_ALLOWED_HOSTS
+# ---------------------------------------------------------------------------
+
+def test_allowlisted_private_host_is_accepted(monkeypatch):
+    monkeypatch.setenv("GRAPHIFY_ALLOWED_HOSTS", "wiki.corp.internal")
+    url = "http://wiki.corp.internal/page"
+    with patch("socket.getaddrinfo", return_value=[(2, 1, 6, "", ("10.0.0.5", 0))]):
+        assert validate_url(url) == url
+
+
+def test_allowlist_covers_subdomains(monkeypatch):
+    monkeypatch.setenv("GRAPHIFY_ALLOWED_HOSTS", "corp.internal")
+    url = "http://docs.corp.internal/"
+    with patch("socket.getaddrinfo", return_value=[(2, 1, 6, "", ("10.0.0.6", 0))]):
+        assert validate_url(url) == url
+
+
+def test_private_host_still_blocked_without_allowlist(monkeypatch):
+    monkeypatch.delenv("GRAPHIFY_ALLOWED_HOSTS", raising=False)
+    with patch("socket.getaddrinfo", return_value=[(2, 1, 6, "", ("10.0.0.5", 0))]):
+        with pytest.raises(ValueError, match="private"):
+            validate_url("http://wiki.corp.internal/page")
