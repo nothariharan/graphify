@@ -102,6 +102,18 @@ def _ip_is_blocked(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     )
 
 
+def _allowed_hosts() -> tuple[str, ...]:
+    """Hosts from ``GRAPHIFY_ALLOWED_HOSTS`` (comma-separated), lower-cased."""
+    raw = os.environ.get("GRAPHIFY_ALLOWED_HOSTS", "")
+    return tuple(h.strip().lower() for h in raw.split(",") if h.strip())
+
+
+def _is_allowlisted_host(hostname: str) -> bool:
+    """True when *hostname* is an allowlisted host or one of its subdomains."""
+    host = hostname.lower().rstrip(".")
+    return any(host.endswith(allowed) for allowed in _allowed_hosts())
+
+
 def validate_url(url: str) -> str:
     """Raise ValueError if *url* is not http or https, or targets a private/internal IP.
 
@@ -130,6 +142,11 @@ def validate_url(url: str) -> str:
     hostname = parsed.hostname
     if not hostname:
         raise ValueError(f"Blocked URL without a hostname. Got: {url!r}")
+
+    # Self-hosted docs/wiki servers on a private network are a legitimate
+    # ingest source. Hosts the user lists explicitly skip the private-IP check.
+    if _is_allowlisted_host(hostname):
+        return url
 
     if hostname:
         # Block known cloud metadata hostnames
