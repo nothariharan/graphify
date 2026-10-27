@@ -438,6 +438,11 @@ def redact_secrets(text: str | None) -> str:
     return _SECRET_SHAPE_RE.sub(REDACTED_MARKER, str(text))
 
 
+def _truncate(text: str, limit: int) -> str:
+    """Return *text* cut to at most *limit* characters."""
+    return text[:limit] if len(text) > limit else text
+
+
 def sanitize_label(text: str | None) -> str:
     """Strip control characters and cap length.
 
@@ -446,10 +451,7 @@ def sanitize_label(text: str | None) -> str:
     """
     if text is None:
         return ""
-    text = _CONTROL_CHAR_RE.sub("", str(text))
-    if len(text) > _MAX_LABEL_LEN:
-        text = text[:_MAX_LABEL_LEN]
-    return text
+    return _truncate(_CONTROL_CHAR_RE.sub("", str(text)), _MAX_LABEL_LEN)
 
 
 # ---------------------------------------------------------------------------
@@ -465,9 +467,7 @@ def _sanitize_metadata_string(value: object) -> str:
     """Return a control-character-free, HTML-escaped, bounded string."""
     text = _CONTROL_CHAR_RE.sub("", str(value))
     text = html.escape(text, quote=True)
-    if len(text) > _METADATA_MAX_VALUE_LEN:
-        text = text[:_METADATA_MAX_VALUE_LEN]
-    return text  # html is imported at module level (line 5)
+    return _truncate(text, _METADATA_MAX_VALUE_LEN)
 
 
 def _sanitize_metadata_value(value: object) -> object:
