@@ -37,9 +37,9 @@ def _max_graph_file_bytes() -> int:
 
     Honors the ``GRAPHIFY_MAX_GRAPH_BYTES`` environment variable so users with
     large codebases can raise the limit without editing source. The value may
-    be plain bytes (``671088640``) or carry an ``MB`` / ``GB`` suffix
-    (``640MB``, ``2GB`` — case-insensitive, binary multipliers: ``MB`` is
-    1024*1024 and ``GB`` is 1024*1024*1024, i.e. MiB / GiB).
+    be plain bytes (``671088640``) or carry a ``KB`` / ``MB`` / ``GB`` suffix
+    (``640MB``, ``1.5GB`` — case-insensitive, fractional values allowed, binary
+    multipliers: ``KB`` is 1024, ``MB`` 1024*1024, ``GB`` 1024*1024*1024).
     Falls back to ``_MAX_GRAPH_FILE_BYTES`` (512 MiB) when the env var is unset,
     blank, or unparseable.
 
@@ -51,19 +51,18 @@ def _max_graph_file_bytes() -> int:
         return _MAX_GRAPH_FILE_BYTES
     text = raw.upper()
     multiplier = 1
-    if text.endswith("GB"):
-        multiplier = 1024 * 1024 * 1024
-        text = text[:-2].strip()
-    elif text.endswith("MB"):
-        multiplier = 1024 * 1024
-        text = text[:-2].strip()
+    for suffix, factor in (("GB", 1024 ** 3), ("MB", 1024 ** 2), ("KB", 1024)):
+        if text.endswith(suffix):
+            multiplier = factor
+            text = text[: -len(suffix)].strip()
+            break
     try:
-        value = int(text)
+        value = float(text)
     except ValueError:
         return _MAX_GRAPH_FILE_BYTES
     if value <= 0:
         return _MAX_GRAPH_FILE_BYTES
-    return value * multiplier
+    return int(value * multiplier)
 
 # AWS metadata, link-local, and common cloud metadata endpoints
 _BLOCKED_HOSTS = {"metadata.google.internal", "metadata.google.com"}
