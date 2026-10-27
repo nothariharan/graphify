@@ -302,10 +302,20 @@ def test_max_graph_bytes_tolerates_space_before_suffix(monkeypatch):
     assert _max_graph_file_bytes() == 5 * 1024 * 1024 * 1024
 
 
-@pytest.mark.parametrize("bad", ["not-a-number", "1.5GB", "0x10", "640KB"])
+@pytest.mark.parametrize("bad", ["not-a-number", "0x10", "12TB"])
 def test_max_graph_bytes_unparseable_falls_back(monkeypatch, bad):
     monkeypatch.setenv("GRAPHIFY_MAX_GRAPH_BYTES", bad)
     assert _max_graph_file_bytes() == _MAX_GRAPH_FILE_BYTES
+
+
+def test_max_graph_bytes_kb_suffix_is_binary(monkeypatch):
+    monkeypatch.setenv("GRAPHIFY_MAX_GRAPH_BYTES", "512KB")
+    assert _max_graph_file_bytes() == 512 * 1024
+
+
+def test_max_graph_bytes_accepts_fractional_gb(monkeypatch):
+    monkeypatch.setenv("GRAPHIFY_MAX_GRAPH_BYTES", "1.5GB")
+    assert _max_graph_file_bytes() == int(1.5 * 1024 ** 3)
 
 
 @pytest.mark.parametrize("nonpositive", ["0", "-1", "-4GB"])
@@ -541,3 +551,9 @@ def test_redact_secrets_does_not_mangle_hashes_and_ids():
         "class AkiaConfigProvider implements Provider",
     ):
         assert redact_secrets(benign) == benign, benign
+
+
+@pytest.mark.parametrize("special", ["inf", "nan", "-inf", "infGB"])
+def test_max_graph_bytes_non_finite_falls_back(monkeypatch, special):
+    monkeypatch.setenv("GRAPHIFY_MAX_GRAPH_BYTES", special)
+    assert _max_graph_file_bytes() == _MAX_GRAPH_FILE_BYTES
