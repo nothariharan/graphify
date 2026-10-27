@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import urllib.error
+import os
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -189,6 +190,15 @@ def test_validate_graph_path_blocks_traversal(tmp_path):
     evil = tmp_path / "graphify-out" / ".." / "etc_passwd"
     with pytest.raises(ValueError, match="escapes"):
         validate_graph_path(str(evil), base=base)
+
+@pytest.mark.skipif(os.name != "nt", reason="case-insensitive paths are a Windows property")
+def test_validate_graph_path_accepts_differently_cased_base_on_windows(tmp_path):
+    base = tmp_path / "graphify-out"
+    base.mkdir()
+    graph = base / "graph.json"
+    graph.write_text("{}")
+    upper_base = Path(str(base).upper())
+    assert validate_graph_path(str(graph), base=upper_base) == graph.resolve()
 
 def test_validate_graph_path_requires_base_exists(tmp_path):
     base = tmp_path / "graphify-out"  # not created
