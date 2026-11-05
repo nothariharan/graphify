@@ -124,8 +124,6 @@ def validate_url(url: str) -> str:
         port = parsed.port
     except ValueError as exc:
         raise ValueError(f"Blocked URL with an invalid port. Got: {url!r}") from exc
-    if port == 0:
-        raise ValueError(f"Blocked URL with port 0. Got: {url!r}")
 
     hostname = parsed.hostname
     if not hostname:
