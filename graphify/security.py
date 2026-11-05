@@ -447,8 +447,8 @@ def sanitize_label(text: str | None) -> str:
     if text is None:
         return ""
     text = _CONTROL_CHAR_RE.sub("", str(text))
-    if len(text) > _MAX_LABEL_LEN:
-        text = text[:_MAX_LABEL_LEN]
+    if len(text) >= _MAX_LABEL_LEN:
+        text = text[:_MAX_LABEL_LEN - 1]
     return text
 
 
