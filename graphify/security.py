@@ -480,7 +480,8 @@ def _sanitize_metadata_value(value: object) -> object:
     if isinstance(value, dict):
         return sanitize_metadata(value)
     if isinstance(value, (list, tuple)):
-        return [_sanitize_metadata_value(item) for item in value[:_METADATA_MAX_LIST_ITEMS]]
+        items = [_sanitize_metadata_value(item) for item in value[:_METADATA_MAX_LIST_ITEMS]]
+        return tuple(items) if isinstance(value, tuple) else items
     if isinstance(value, (int, float)) or value is None:
         return value
     return _sanitize_metadata_string(value)
