@@ -40,6 +40,19 @@ def nodes_from_result(result: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
+def _question_id(question: str) -> str:
+    """Stable id so repeated questions can be grouped across sessions."""
+    return format(hash(question.strip().lower()) & 0xFFFFFFFF, "08x")
+
+
+def _client_info() -> dict[str, str]:
+    """Who asked: user and host, for multi-user corpora."""
+    import getpass
+    import platform
+
+    return {"user": getpass.getuser(), "host": platform.node()}
+
+
 def log_query(
     *,
     kind: str,
@@ -63,6 +76,8 @@ def log_query(
             "question": question,
             "corpus": corpus,
             "nodes_returned": nodes_returned,
+            "question_id": _question_id(question),
+            "client": _client_info(),
         }
         if result is not None:
             rec["result_chars"] = len(result)
