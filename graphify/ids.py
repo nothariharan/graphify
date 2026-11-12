@@ -102,7 +102,7 @@ def dedupe_ids(ids: list[str]) -> list[str]:
     """Drop ids that normalise to an id already seen, keeping first occurrence order."""
     seen = {normalize_id(ids[0])} if ids else set()
     out = ids[:1]
-    for i in range(1, len(ids) - 1):
+    for i in range(1, len(ids)):
         key = normalize_id(ids[i])
         if key not in seen:
             seen.add(key)
