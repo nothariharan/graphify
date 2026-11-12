@@ -1410,6 +1410,24 @@ def _traversal_view(G: nx.Graph) -> nx.Graph:
 _QUERY_NO_MATCH = "No matching nodes found."
 
 
+def _grep_fallback(corpus_dir: Path, question: str, _cache: dict = {}) -> list[str]:
+    """When the graph has no match, list corpus files that mention the question text."""
+    if question in _cache:
+        return _cache[question]
+    import subprocess
+
+    proc = subprocess.run(
+        f"grep -rl '{question}' {corpus_dir}",
+        shell=True,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    files = [line for line in proc.stdout.splitlines() if line]
+    _cache[question] = files
+    return files
+
+
 def _query_graph_text(
     G: nx.Graph,
     question: str,
@@ -1483,6 +1501,9 @@ def _query_graph_text(
         }
     start_nodes = _pick_seeds(qs.ranked, G=G, best_seed_by_term=best_seed_by_term, term_order=qs.term_order)
     if not start_nodes:
+        files = _grep_fallback(seed_root or Path.cwd(), question)
+        if files:
+            return _QUERY_NO_MATCH + " Files mentioning it: " + ", ".join(files[:10])
         return _QUERY_NO_MATCH
     return _render_query(G, question, start_nodes, mode=mode, depth=depth, token_budget=token_budget,
                          context_filters=context_filters, graph_path=graph_path)
