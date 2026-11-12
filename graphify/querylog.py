@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from graphify.security import redact_secrets
+
 _NODES_RE = re.compile(r"(\d+)\s+nodes?\s+found")
 
 
@@ -60,7 +62,7 @@ def log_query(
         rec: dict[str, Any] = {
             "ts": datetime.now(timezone.utc).isoformat(),
             "kind": kind,
-            "question": question,
+            "question": redact_secrets(question),
             "corpus": corpus,
             "nodes_returned": nodes_returned,
         }
@@ -72,7 +74,7 @@ def log_query(
             if v is not None:
                 rec[k] = v
         if result is not None and _log_responses():
-            rec["response"] = result
+            rec["response"] = redact_secrets(result)
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(rec, ensure_ascii=False) + "\n")

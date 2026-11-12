@@ -221,3 +221,34 @@ def test_log_query_writes_nothing_by_default(monkeypatch, tmp_path):
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
     log_query(kind="query", question="secret internal ticket TICKET-123", corpus=".", result="1 node found")
     assert not (tmp_path / ".cache" / "graphify-queries.log").exists()
+
+
+# ---------------------------------------------------------------------------
+# log_query — credential redaction
+# ---------------------------------------------------------------------------
+
+def test_log_query_redacts_token_in_question(tmp_path, monkeypatch):
+    log_file = tmp_path / "q.log"
+    monkeypatch.setenv("GRAPHIFY_QUERY_LOG", str(log_file))
+    monkeypatch.delenv("GRAPHIFY_QUERY_LOG_DISABLE", raising=False)
+    token = "ghp_" + "a" * 36
+
+    log_query(kind="query", question=f"why does {token} fail", corpus="g.json")
+
+    rec = json.loads(log_file.read_text(encoding="utf-8").strip())
+    assert token not in rec["question"]
+    assert "[redacted]" in rec["question"]
+
+
+def test_log_query_redacts_token_in_logged_response(tmp_path, monkeypatch):
+    log_file = tmp_path / "q.log"
+    monkeypatch.setenv("GRAPHIFY_QUERY_LOG", str(log_file))
+    monkeypatch.setenv("GRAPHIFY_QUERY_LOG_RESPONSES", "1")
+    monkeypatch.delenv("GRAPHIFY_QUERY_LOG_DISABLE", raising=False)
+    token = "AKIA" + "B" * 16
+
+    log_query(kind="query", question="q", corpus="g.json", result=f"NODE key={token}")
+
+    rec = json.loads(log_file.read_text(encoding="utf-8").strip())
+    assert token not in rec["response"]
+    assert rec["result_chars"] == len(f"NODE key={token}")
