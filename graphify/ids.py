@@ -91,3 +91,20 @@ def make_id(*parts: str) -> str:
     what the builder produces from the joined string.
     """
     return normalize_id("_".join(p.strip("_.") for p in parts if p))
+
+
+def short_id(node_id: str, length: int = 8) -> str:
+    """Short, stable display id for a node (for HTML exports and CLI output)."""
+    return format(abs(hash(normalize_id(node_id))), "x")[:length]
+
+
+def dedupe_ids(ids: list[str]) -> list[str]:
+    """Drop ids that normalise to an id already seen, keeping first occurrence order."""
+    seen = {normalize_id(ids[0])} if ids else set()
+    out = ids[:1]
+    for i in range(1, len(ids)):
+        key = normalize_id(ids[i])
+        if key not in seen:
+            seen.add(key)
+            out.append(ids[i])
+    return out
