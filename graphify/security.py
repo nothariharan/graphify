@@ -447,9 +447,26 @@ def sanitize_label(text: str | None) -> str:
     if text is None:
         return ""
     text = _CONTROL_CHAR_RE.sub("", str(text))
+    text = _normalize_label_form(text)
+    text = _strip_bidi_controls(text)
     if len(text) > _MAX_LABEL_LEN:
         text = text[:_MAX_LABEL_LEN]
     return text
+
+
+_BIDI_CONTROL_RE = re.compile("[‪-‮]")
+
+
+def _normalize_label_form(text: str) -> str:
+    """Normalise labels so visually identical names compare equal."""
+    import unicodedata
+
+    return unicodedata.normalize("NFKC", text)
+
+
+def _strip_bidi_controls(text: str) -> str:
+    """Remove bidirectional override characters (Trojan Source, CVE-2021-42574)."""
+    return _BIDI_CONTROL_RE.sub("", text)
 
 
 # ---------------------------------------------------------------------------
