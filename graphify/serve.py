@@ -636,23 +636,29 @@ def _compute_idf(G: nx.Graph, terms: list[str]) -> dict[str, float]:
     N = G.number_of_nodes() or 1
     uncached = [t for t in terms if t not in cache]
     if uncached:
-        df: dict[str, int] = {t: 0 for t in uncached}
         # Document frequency is "term appears in norm_label". The trigram index
         # is a superset of that (it indexes every searchable field), so it can
         # skip the nodes that cannot match; the exact `in norm_label` test below
-        # still decides. A short or common term makes `_trigram_candidates`
-        # return None and the full scan runs exactly as before. IDF stays a
-        # whole-graph statistic either way (#1431 invariant).
+        # still decides. This is per TERM, not per query: the old code asked
+        # `_trigram_candidates` for the union of every uncached term, and a
+        # single broad term made that bail to a whole-graph scan of every term.
+        # A term's own posting intersection is the same superset, so one broad
+        # word no longer drags the whole query through the full scan. A term
+        # too short to trigram still falls back to the full scan, exactly as
+        # before. IDF stays a whole-graph statistic either way (#1431 invariant).
         fields = _node_fields(G)
-        candidates = _trigram_candidates(G, uncached)
-        node_ids = G.nodes() if candidates is None else candidates
-        for nid in node_ids:
-            norm_label = fields[nid].norm_label
-            for t in uncached:
-                if t in norm_label:
-                    df[t] += 1
+        idx = _get_trigram_index(G)
+        ids = idx["ids"]
         for t in uncached:
-            cache[t] = math.log(1 + N / (1 + df[t]))
+            hits = _trigram_hits(idx, t)
+            if hits is None:
+                df_t = sum(1 for nid in ids if t in fields[nid].norm_label)
+            else:
+                df_t = 0
+                for pos in hits:
+                    if t in fields[ids[pos]].norm_label:
+                        df_t += 1
+            cache[t] = math.log(1 + N / (1 + df_t))
     return {t: cache.get(t, math.log(1 + N)) for t in terms}
 
 
@@ -760,6 +766,42 @@ def _get_trigram_index(G: nx.Graph) -> dict:
     idx = {"ids": ids, "postings": postings, "set_cache": {}}
     G.graph["_trigram_index"] = idx
     return idx
+
+
+def _trigram_hits(idx: dict, needle: str) -> "set[int] | None":
+    """Positions whose search text contains every trigram of `needle`, or None.
+
+    A *superset* of "needle occurs in one of the indexed fields": intersection of
+    the term's own posting lists, smallest first, which is exact about trigram
+    presence but not about their order. `None` means the needle is too short to
+    trigram (or empty), so no index can narrow it and the caller must scan.
+
+    Returned sets are the memoized per-trigram sets themselves, so callers must
+    not mutate them; intersect into a new set instead. Deliberately has **no**
+    frequency guard: a broad term still gets its (large) posting intersection,
+    because the alternative — a whole-graph scan — is strictly more work.
+    """
+    tgs = _trigrams(needle)
+    if not tgs or any(len(g) < 3 for g in tgs):
+        return None
+    postings, set_cache = idx["postings"], idx["set_cache"]
+    sets: list[set] = []
+    for g in tgs:
+        cached = set_cache.get(g)
+        if cached is None:
+            bucket = postings.get(g)
+            if bucket is None:
+                return set()  # this trigram occurs nowhere -> no match at all
+            cached = set(bucket)
+            set_cache[g] = cached
+        sets.append(cached)
+    sets.sort(key=len)  # intersect smallest-first
+    hit = sets[0]
+    for other in sets[1:]:
+        hit = hit & other
+        if not hit:
+            break
+    return hit
 
 
 def _trigram_candidates(G: nx.Graph, needles: list[str], *, guard_frac: float = 0.10) -> list[str] | None:
