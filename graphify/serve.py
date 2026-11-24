@@ -886,17 +886,36 @@ _QUERY_DOC_SUFFIXES = (".md", ".rst", ".txt", ".yml", ".yaml", ".toml", ".cfg", 
 _QUERY_DOC_DIRS = frozenset({"doc", "docs", "example", "examples"})
 
 
-def _query_path_weight(terms: list[str], demote_docs: bool = True):
+def _query_path_weight(terms: list[str], demote_docs: bool = True, *, G: "nx.Graph | None" = None):
     """Score multiplier per node for `query`: tests, docs, config files and nodes
     without a source file count `_QUERY_DEMOTE_WEIGHT`, unless the question itself
-    asks about tests (or docs); everything else counts 1.0."""
+    asks about tests (or docs); everything else counts 1.0.
+
+    When `G` is given the file classification is cached on the graph instead of in
+    this query's closure: it is a pure function of `(path, file_type)`, the same
+    corpus has the same ~5.8k files for every question, and a broad query touches
+    most of them. Rebuilding it per query cost ~160 ms of a 550 ms broad large-graph
+    query (`_is_test_path` builds a `Path` per call). Callers that only want the
+    classifier for a one-off check (tests) omit `G` and keep a local memo.
+    """
     words = {tok for t in terms for tok in _search_tokens(t)}
     keep_tests = bool(words & _QUERY_TEST_WORDS)
     keep_docs = (not demote_docs) or bool(words & _QUERY_DOC_WORDS)
     # Test/doc classification depends only on (path, file_type), and a corpus has
     # far fewer files than nodes (`_is_test_path` builds a Path object each call).
-    # Memoize per file, not per node, inside this query's closure.
-    class_cache: dict[tuple[str, str], tuple[bool, bool]] = {}
+    # Memoize per file, not per node.
+    if G is None:
+        class_cache: dict[tuple[str, str], tuple[bool, bool]] = {}
+    else:
+        # An attribute on the graph OBJECT, not in `G.graph`: anything in
+        # `G.graph` is serialized by node_link_data, and `graphify merge-driver`
+        # loads through this module and writes the result back to graph.json —
+        # so a cache keyed by source paths would put them into a committed file.
+        # That is the leak #1789 was filed for (see `_trigram_cache_key`).
+        class_cache = getattr(G, "_gfy_path_class_cache", None)
+        if class_cache is None:
+            class_cache = {}
+            G._gfy_path_class_cache = class_cache
 
     def weight(data: dict) -> float:
         path = str(data.get("source_file") or "").replace("\\", "/")
@@ -2053,7 +2072,7 @@ def _query_graph_text(
         G,
         terms,
         collect_per_term_seeds=True,
-        path_weight=_query_path_weight(terms, demote_docs=demote_docs),
+        path_weight=_query_path_weight(terms, demote_docs=demote_docs, G=G),
     )
     # Relational-intent verbs ("calls", "uses", ...) describe the relation the
     # question asks about, not a symbol to seed from; drop them from the
