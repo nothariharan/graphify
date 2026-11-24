@@ -10,6 +10,7 @@ from array import array
 from collections import OrderedDict
 from pathlib import Path
 import threading
+from collections.abc import Callable
 from typing import NamedTuple
 import networkx as nx
 from networkx.readwrite import json_graph
@@ -615,7 +616,7 @@ def _node_data(G: nx.Graph) -> list[dict]:
     # An attribute on the graph OBJECT, not in `G.graph` (see
     # `_query_path_weight`): `G.graph` is serialized by node_link_data, and this
     # list is just the node dicts again.
-    G._gfy_node_data = (n, data)
+    setattr(G, "_gfy_node_data", (n, data))
     return data
 
 
@@ -934,10 +935,11 @@ def _query_path_weight(terms: list[str], demote_docs: bool = True, *, G: "nx.Gra
         # loads through this module and writes the result back to graph.json —
         # so a cache keyed by source paths would put them into a committed file.
         # That is the leak #1789 was filed for (see `_trigram_cache_key`).
-        class_cache = getattr(G, "_gfy_path_class_cache", None)
-        if class_cache is None:
-            class_cache = {}
-            G._gfy_path_class_cache = class_cache
+        existing = getattr(G, "_gfy_path_class_cache", None)
+        if existing is None:
+            existing = {}
+            setattr(G, "_gfy_path_class_cache", existing)
+        class_cache = existing
 
     def weight(data: dict) -> float:
         path = str(data.get("source_file") or "").replace("\\", "/")
@@ -1104,7 +1106,7 @@ def _score_query(
                 qualifier_tokens, tail_key = qualified
                 if tail_key and tail_key == joined:
                     acc[pos] = [0.0, 0, _QUALIFIED_MATCH_BONUS * joined_w / qualifier_tokens]
-    node_data = _node_data(G) if path_weight is not None else None
+    node_data = _node_data(G) if path_weight is not None else []
     # Per-position multipliers, filled on demand: a broad query asks about most
     # of the matched nodes once, and the final pass reuses the same values.
     weight_cache: dict[int, float] = {}
