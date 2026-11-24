@@ -10,6 +10,7 @@ from array import array
 from collections import OrderedDict
 from pathlib import Path
 import threading
+from collections.abc import Callable
 from typing import NamedTuple
 import networkx as nx
 from networkx.readwrite import json_graph
@@ -597,6 +598,28 @@ def _node_qualified(G: nx.Graph, nid: str, norm_label: str):
     return value
 
 
+def _node_data(G: nx.Graph) -> list[dict]:
+    """The node attribute dicts in graph iteration order, cached per graph.
+
+    The trigram index's position ids are `list(G.nodes())` in that same order, so
+    `_node_data(G)[pos]` is the dict for `ids[pos]`. The scorer needs a node dict
+    for the `query` path-weight callback; `G.nodes[nid]` goes through networkx's
+    filtered view (`AtlasView.__getitem__` -> the real dict) and cost ~0.7 us per
+    hit, which is tens of milliseconds on a broad query. Guarded by node count
+    like the other per-graph caches (serve never mutates a loaded graph).
+    """
+    n = G.number_of_nodes()
+    cached = getattr(G, "_gfy_node_data", None)
+    if cached is not None and cached[0] == n:
+        return cached[1]
+    data = [d for _, d in G.nodes(data=True)]
+    # An attribute on the graph OBJECT, not in `G.graph` (see
+    # `_query_path_weight`): `G.graph` is serialized by node_link_data, and this
+    # list is just the node dicts again.
+    setattr(G, "_gfy_node_data", (n, data))
+    return data
+
+
 def _degree_data(G: nx.Graph) -> tuple[dict[str, int], int]:
     """Per-node degree and the BFS/DFS hub threshold, computed once per graph.
 
@@ -636,23 +659,29 @@ def _compute_idf(G: nx.Graph, terms: list[str]) -> dict[str, float]:
     N = G.number_of_nodes() or 1
     uncached = [t for t in terms if t not in cache]
     if uncached:
-        df: dict[str, int] = {t: 0 for t in uncached}
         # Document frequency is "term appears in norm_label". The trigram index
         # is a superset of that (it indexes every searchable field), so it can
         # skip the nodes that cannot match; the exact `in norm_label` test below
-        # still decides. A short or common term makes `_trigram_candidates`
-        # return None and the full scan runs exactly as before. IDF stays a
-        # whole-graph statistic either way (#1431 invariant).
+        # still decides. This is per TERM, not per query: the old code asked
+        # `_trigram_candidates` for the union of every uncached term, and a
+        # single broad term made that bail to a whole-graph scan of every term.
+        # A term's own posting intersection is the same superset, so one broad
+        # word no longer drags the whole query through the full scan. A term
+        # too short to trigram still falls back to the full scan, exactly as
+        # before. IDF stays a whole-graph statistic either way (#1431 invariant).
         fields = _node_fields(G)
-        candidates = _trigram_candidates(G, uncached)
-        node_ids = G.nodes() if candidates is None else candidates
-        for nid in node_ids:
-            norm_label = fields[nid].norm_label
-            for t in uncached:
-                if t in norm_label:
-                    df[t] += 1
+        idx = _get_trigram_index(G)
+        ids = idx["ids"]
         for t in uncached:
-            cache[t] = math.log(1 + N / (1 + df[t]))
+            hits = _trigram_hits(idx, t)
+            if hits is None:
+                df_t = sum(1 for nid in ids if t in fields[nid].norm_label)
+            else:
+                df_t = 0
+                for pos in hits:
+                    if t in fields[ids[pos]].norm_label:
+                        df_t += 1
+            cache[t] = math.log(1 + N / (1 + df_t))
     return {t: cache.get(t, math.log(1 + N)) for t in terms}
 
 
@@ -762,6 +791,42 @@ def _get_trigram_index(G: nx.Graph) -> dict:
     return idx
 
 
+def _trigram_hits(idx: dict, needle: str) -> "set[int] | None":
+    """Positions whose search text contains every trigram of `needle`, or None.
+
+    A *superset* of "needle occurs in one of the indexed fields": intersection of
+    the term's own posting lists, smallest first, which is exact about trigram
+    presence but not about their order. `None` means the needle is too short to
+    trigram (or empty), so no index can narrow it and the caller must scan.
+
+    Returned sets are the memoized per-trigram sets themselves, so callers must
+    not mutate them; intersect into a new set instead. Deliberately has **no**
+    frequency guard: a broad term still gets its (large) posting intersection,
+    because the alternative — a whole-graph scan — is strictly more work.
+    """
+    tgs = _trigrams(needle)
+    if not tgs or any(len(g) < 3 for g in tgs):
+        return None
+    postings, set_cache = idx["postings"], idx["set_cache"]
+    sets: list[set] = []
+    for g in tgs:
+        cached = set_cache.get(g)
+        if cached is None:
+            bucket = postings.get(g)
+            if bucket is None:
+                return set()  # this trigram occurs nowhere -> no match at all
+            cached = set(bucket)
+            set_cache[g] = cached
+        sets.append(cached)
+    sets.sort(key=len)  # intersect smallest-first
+    hit = sets[0]
+    for other in sets[1:]:
+        hit = hit & other
+        if not hit:
+            break
+    return hit
+
+
 def _trigram_candidates(G: nx.Graph, needles: list[str], *, guard_frac: float = 0.10) -> list[str] | None:
     """Node IDs whose text could contain any `needle` as a substring, via the
     trigram index — a *superset* the caller then re-scores with the exact predicates.
@@ -844,17 +909,37 @@ _QUERY_DOC_SUFFIXES = (".md", ".rst", ".txt", ".yml", ".yaml", ".toml", ".cfg", 
 _QUERY_DOC_DIRS = frozenset({"doc", "docs", "example", "examples"})
 
 
-def _query_path_weight(terms: list[str], demote_docs: bool = True):
+def _query_path_weight(terms: list[str], demote_docs: bool = True, *, G: "nx.Graph | None" = None):
     """Score multiplier per node for `query`: tests, docs, config files and nodes
     without a source file count `_QUERY_DEMOTE_WEIGHT`, unless the question itself
-    asks about tests (or docs); everything else counts 1.0."""
+    asks about tests (or docs); everything else counts 1.0.
+
+    When `G` is given the file classification is cached on the graph instead of in
+    this query's closure: it is a pure function of `(path, file_type)`, the same
+    corpus has the same ~5.8k files for every question, and a broad query touches
+    most of them. Rebuilding it per query cost 160 ms of a 550 ms broad large-graph
+    query (`_is_test_path` builds a `Path` per call). Callers that only want the
+    classifier for a one-off check (tests) omit `G` and keep a local memo.
+    """
     words = {tok for t in terms for tok in _search_tokens(t)}
     keep_tests = bool(words & _QUERY_TEST_WORDS)
     keep_docs = (not demote_docs) or bool(words & _QUERY_DOC_WORDS)
     # Test/doc classification depends only on (path, file_type), and a corpus has
     # far fewer files than nodes (`_is_test_path` builds a Path object each call).
-    # Memoize per file, not per node, inside this query's closure.
-    class_cache: dict[tuple[str, str], tuple[bool, bool]] = {}
+    # Memoize per file, not per node.
+    if G is None:
+        class_cache: dict[tuple[str, str], tuple[bool, bool]] = {}
+    else:
+        # An attribute on the graph OBJECT, not in `G.graph`: anything in
+        # `G.graph` is serialized by node_link_data, and `graphify merge-driver`
+        # loads through this module and writes the result back to graph.json —
+        # so a cache keyed by source paths would put them into a committed file.
+        # That is the leak #1789 was filed for (see `_trigram_cache_key`).
+        existing = getattr(G, "_gfy_path_class_cache", None)
+        if existing is None:
+            existing = {}
+            setattr(G, "_gfy_path_class_cache", existing)
+        class_cache = existing
 
     def weight(data: dict) -> float:
         path = str(data.get("source_file") or "").replace("\\", "/")
@@ -927,7 +1012,6 @@ def _score_query(
     each per-token `[t]` candidate set, so iterating combined candidates
     discovers every non-zero singleton-score node for every term.
     """
-    scored: list[tuple[float, str]] = []
     # Dedupe tokens, order-preserving (as _pick_seeds already does): a repeated
     # query word must not double-count every tier, and with coverage scaling
     # below it would also inflate the matched-term ratio (#1602).
@@ -939,159 +1023,213 @@ def _score_query(
     # Weight the full-query bonus by the rarest constituent term so a specific
     # multi-word label still outweighs common-token noise; floor at 1.0.
     joined_w = max((idf.get(t, 1.0) for t in norm_terms), default=1.0)
-    # Trigram prefilter: score only nodes whose text could match a term, falling
-    # back to the whole graph when the index isn't selective. The result is
-    # identical either way — the per-node scoring below is unchanged and a
-    # non-candidate node always scores 0. (IDF above stays a whole-graph statistic.)
-    candidate_ids = _trigram_candidates(G, norm_terms + ([joined] if joined else []))
-    node_iter = (
-        G.nodes(data=True) if candidate_ids is None
-        else ((nid, G.nodes[nid]) for nid in candidate_ids)
-    )
     # Per-token best tracking, only when the caller (the query path) wants the
     # seed metadata. The key tuple is the full multi-key tie-break
     # (`(-singleton_score, -degree, label_len, nid)`), so `min` over the
     # stored key mirrors the legacy `max(tied, key=degree)` over a
-    # (-score, label_len, nid)-sorted term_scored list. `None` is comparable
-    # as "smaller" than every tuple, so the first non-zero candidate seeds the
-    # entry without a separate `if t not in best_by_term` branch.
+    # (-score, label_len, nid)-sorted term_scored list.
     best_by_term: dict[str, tuple[tuple, str]] | None = (
         {} if collect_per_term_seeds else None
     )
     node_fields = _node_fields(G)
     degrees, _hub = _degree_data(G)
-    for nid, data in node_iter:
-        f = node_fields[nid]
+    idx = _get_trigram_index(G)
+    ids = idx["ids"]
+    if not n_terms or not ids:
+        return _QueryScores(ranked=[], best_seed_by_term={}, term_order=())
+    # Visit plan: one posting intersection per term instead of one whole-graph
+    # scan per query. A term's own intersection is a superset of every node that
+    # term can touch (label, source, rationale, attributes, id, tokens — the
+    # index covers them all), and it is computed even when a trigram is common:
+    # the old code asked `_trigram_candidates` for the UNION of every needle and
+    # bailed to the whole graph as soon as ANY needle crossed `guard_frac`, so a
+    # single broad word ("data", "test", "api") made the scorer walk all 70k
+    # nodes. Intersecting is strictly less work than that, broad or not: the
+    # per-term sets are memoized across queries, and a term too short to trigram
+    # is the only case that still needs the full scan.
+    plan: list[tuple[str, float, "set[int] | None"]] = []
+    full_scan = False
+    for t in norm_terms:
+        hits = _trigram_hits(idx, t)
+        if hits is None:
+            full_scan = True
+        plan.append((t, idf.get(t, 1.0), hits))
+    # Nodes the full-query tier can fire on: every term's candidates plus the
+    # joined string's own. The joined needle misses two cases that the term
+    # intersections still cover — a `label_tokens` equality joins the label's
+    # tokens with spaces, which the label text itself does not contain, and a
+    # qualified tail (`sweep_widget_state` -> "sweep widget state") likewise —
+    # so the union, not the joined posting list alone, is the visited set.
+    # Reverse direction is safe: every node the joined tier can fire on either
+    # contains all of `joined`'s trigrams or contains every term's text.
+    joined_hits = _trigram_hits(idx, joined)
+    if full_scan or joined_hits is None:
+        joined_positions: "range | set[int]" = range(len(ids))
+    else:
+        joined_positions = set(joined_hits)
+        for _t, _w, hits in plan:
+            if hits:
+                joined_positions |= hits
+    # `acc[pos] = [tiered, matched, partial_score]`. `partial_score` starts as
+    # the full-query tier's bonus and then receives each term's substring /
+    # source / rationale / attribute contribution in term order, which is the
+    # exact order the old single loop added them in — float addition is not
+    # associative, so the order is part of the output contract.
+    acc: dict[int, list] = {}
+    # Full-query tier: a multi-word query that equals (or prefixes) the whole
+    # label must dominate the per-token bag-of-words sums below, so `path`/
+    # `query` resolve the same node `explain` does (via _find_node). Without
+    # this, no single token equals a multi-word label, the per-token exact
+    # tier never fires, and every node sharing the token set ties -> arbitrary
+    # node-id sort -> wrong/disconnected endpoint -> false "No path found".
+    exact_joined = _EXACT_MATCH_BONUS * 10 * joined_w
+    prefix_joined = _PREFIX_MATCH_BONUS * 10 * joined_w
+    for pos in joined_positions:
+        f = node_fields[ids[pos]]
         norm_label = f.norm_label
-        bare_label = f.bare_label
-        # Tokenized form of the label (punctuation stripped, same transform as the
-        # query). norm_label may still carry punctuation like ':' or '-', which a
-        # tokenized query can never equal; comparing token-joined forms on both
-        # sides makes "uoce: dehumidifier driver" match query "uoce dehumidifier
-        # driver".
-        label_tokens = f.label_tokens
-        source = f.source
-        rationale = f.rationale
-        attr_norm, attr_tokens = f.attr_norm, f.attr_tokens
-        # `nid_lower` is needed both by the full-query tier (`if joined`) and by
-        # the per-token singleton tier (joined-singlet exact-match check). When
-        # neither runs (`joined` empty AND not collecting seeds) the cached value
-        # is still free — it was computed once for the index, not per query.
-        nid_lower = f.nid_lower if (joined or collect_per_term_seeds) else ""
-        # `query` passes a per-node multiplier (tests/docs below source); it scales
-        # the combined score and the per-term singleton alike, so the per-term
-        # seed guarantee still holds but prefers a source node for each term.
-        weight = path_weight(data) if path_weight is not None else 1.0
-        score = 0.0
-        # Full-query tier: a multi-word query that equals (or prefixes) the whole
-        # label must dominate the per-token bag-of-words sums below, so `path`/
-        # `query` resolve the same node `explain` does (via _find_node). Without
-        # this, no single token equals a multi-word label, the per-token exact
-        # tier never fires, and every node sharing the token set ties -> arbitrary
-        # node-id sort -> wrong/disconnected endpoint -> false "No path found".
-        if joined:
-            if joined in (norm_label, bare_label, label_tokens, nid_lower):
-                score += _EXACT_MATCH_BONUS * 10 * joined_w
-            elif (
-                norm_label.startswith(joined)
-                or bare_label.startswith(joined)
-                or label_tokens.startswith(joined)
-            ):
-                score += _PREFIX_MATCH_BONUS * 10 * joined_w
-            else:
-                # Qualified name: the label is `<qualifier>.<rest>` (or a
-                # CamelCase variant) and the query names the rest. Ranking
-                # below the exact tier — the label is not what was typed — but
-                # above what the per-token tiers can add up to for a node whose
-                # whole label is one query token (#5080).
-                qualified = _node_qualified(G, nid, norm_label)
-                if qualified is not None and qualified[0] <= _QUALIFIED_MAX_TOKENS:
-                    qualifier_tokens, tail_key = qualified
-                    if tail_key and tail_key == joined:
-                        score += _QUALIFIED_MATCH_BONUS * joined_w / qualifier_tokens
-        # Term coverage (#1602): scale the per-term exact/prefix tiers by the
-        # squared fraction of query terms the node's LABEL matches, so a lone
-        # generic word that happens to equal a short label (query term "home"
-        # vs. a home() leaf) cannot bury nodes that match several of the
-        # query's terms. Squaring matters because the exact tier is 10x the
-        # prefix tier: at linear coverage a 1-of-10-terms exact match still
-        # outscores a 3-of-10 prefix+substring match. Single-term and
-        # full-coverage queries are unchanged (coverage == 1), so identifier
-        # lookups keep exact-match dominance. Source-file hits score but do
-        # not count as coverage: a colliding leaf whose directory shares
-        # tokens with the query (common near the intended target) must not
-        # win back its exact tier via path fragments. The substring/source
-        # bonuses and the full-query tier above stay unscaled.
-        matched = 0
-        tiered = 0.0
-        for t in norm_terms:
-            w = idf.get(t, 1.0)
+        if joined in (norm_label, f.bare_label, f.label_tokens, f.nid_lower):
+            acc[pos] = [0.0, 0, exact_joined]
+        elif (
+            norm_label.startswith(joined)
+            or f.bare_label.startswith(joined)
+            or f.label_tokens.startswith(joined)
+        ):
+            acc[pos] = [0.0, 0, prefix_joined]
+        else:
+            # Qualified name: the label is `<qualifier>.<rest>` (or a CamelCase
+            # variant) and the query names the rest. Ranking below the exact
+            # tier — the label is not what was typed — but above what the
+            # per-token tiers can add up to for a node whose whole label is one
+            # query token (#5080).
+            qualified = _node_qualified(G, ids[pos], norm_label)
+            if qualified is not None and qualified[0] <= _QUALIFIED_MAX_TOKENS:
+                qualifier_tokens, tail_key = qualified
+                if tail_key and tail_key == joined:
+                    acc[pos] = [0.0, 0, _QUALIFIED_MATCH_BONUS * joined_w / qualifier_tokens]
+    node_data = _node_data(G) if path_weight is not None else []
+    # Per-position multipliers, filled on demand: a broad query asks about most
+    # of the matched nodes once, and the final pass reuses the same values.
+    weight_cache: dict[int, float] = {}
+    for t, w, hits in plan:
+        positions = range(len(ids)) if hits is None else hits
+        exact = _EXACT_MATCH_BONUS * w
+        prefix = _PREFIX_MATCH_BONUS * w
+        substring = _SUBSTRING_MATCH_BONUS * w
+        source_bonus = _SOURCE_MATCH_BONUS * w
+        rationale_bonus = _RATIONALE_MATCH_BONUS * w
+        attr_bonus = _ATTRIBUTE_MATCH_BONUS * w
+        for pos in positions:
+            f = node_fields[ids[pos]]
+            label = f.norm_label
+            bare = f.bare_label
             # Per-tier contributions for this token, kept separate so the
-            # singleton tracking below can reuse them without re-evaluating
-            # the same predicates. Three-tier precedence: exact > prefix >
-            # substring (take the strongest tier per term so a single term
-            # cannot double-count).
+            # singleton tracking below can reuse them without re-evaluating the
+            # same predicates. Three-tier precedence: exact > prefix > substring
+            # (take the strongest tier per term so a single term cannot
+            # double-count).
             tier_value = 0.0
             substr_value = 0.0
-            source_value = 0.0
-            if t == norm_label or t == bare_label:
-                tier_value = _EXACT_MATCH_BONUS * w
-                matched += 1
-            elif norm_label.startswith(t) or bare_label.startswith(t):
-                tier_value = _PREFIX_MATCH_BONUS * w
-                matched += 1
-            elif t in norm_label:
-                substr_value = _SUBSTRING_MATCH_BONUS * w
-                score += substr_value
-                matched += 1
-            if t in source:
-                source_value = _SOURCE_MATCH_BONUS * w
-                score += source_value
+            matched = 0
+            if t == label or t == bare:
+                tier_value = exact
+                matched = 1
+            elif label.startswith(t) or bare.startswith(t):
+                tier_value = prefix
+                matched = 1
+            elif t in label:
+                substr_value = substring
+                matched = 1
+            source_value = source_bonus if t in f.source else 0.0
             # Rationale tier (#2293): recall for "why" questions whose words
             # live only in the attribute. Adds to the score, not to `matched`.
-            rationale_value = 0.0
-            if rationale and t in rationale:
-                rationale_value = _RATIONALE_MATCH_BONUS * w
-                score += rationale_value
+            rationale_value = (
+                rationale_bonus if (f.rationale and t in f.rationale) else 0.0
+            )
             # Attribute tier (#3625): recall for questions naming attributes or literal values.
-            attr_value = 0.0
-            if attr_norm and (t in attr_norm or t in attr_tokens):
-                attr_value = _ATTRIBUTE_MATCH_BONUS * w
-                score += attr_value
-            tiered += tier_value
-            if collect_per_term_seeds and best_by_term is not None:
+            attr_value = (
+                attr_bonus
+                if (f.attr_norm and (t in f.attr_norm or t in f.attr_tokens))
+                else 0.0
+            )
+            if tier_value or matched or substr_value or source_value or rationale_value or attr_value:
+                slot = acc.get(pos)
+                if slot is None:
+                    slot = acc[pos] = [0.0, 0, 0.0]
+                if tier_value:
+                    slot[0] += tier_value
+                if matched:
+                    slot[1] += 1
+                if substr_value:
+                    slot[2] += substr_value
+                if source_value:
+                    slot[2] += source_value
+                if rationale_value:
+                    slot[2] += rationale_value
+                if attr_value:
+                    slot[2] += attr_value
+            if best_by_term is not None:
                 # Singleton score for [t] on this node, mirroring
                 # `_score_nodes(G, [t])` exactly (n_terms == 1, no coverage
                 # scaling). The joined-singlet tier is broader than the per-
                 # token tier: it also checks `label_tokens` and `nid_lower`,
                 # matching the legacy single-token `_score_nodes([t])` call
                 # (where `joined == t`).
-                if t in (norm_label, bare_label, label_tokens, nid_lower):
+                if t in (label, bare, f.label_tokens, f.nid_lower):
                     singleton = _EXACT_MATCH_BONUS * 10 * w
                 elif (
-                    norm_label.startswith(t)
-                    or bare_label.startswith(t)
-                    or label_tokens.startswith(t)
+                    label.startswith(t)
+                    or bare.startswith(t)
+                    or f.label_tokens.startswith(t)
                 ):
                     singleton = _PREFIX_MATCH_BONUS * 10 * w
                 else:
                     singleton = 0.0
                 singleton += tier_value + substr_value + source_value + rationale_value + attr_value
-                singleton *= weight
                 if singleton > 0:
+                    # `query` passes a per-node multiplier (tests/docs below
+                    # source); it scales the combined score and the per-term
+                    # singleton alike, so the per-term seed guarantee still
+                    # holds but prefers a source node for each term.
+                    if path_weight is None:
+                        weight = 1.0
+                    else:
+                        weight = weight_cache.get(pos)
+                        if weight is None:
+                            weight = weight_cache[pos] = path_weight(node_data[pos])
+                    singleton *= weight
                     # Tie-break key mirrors the legacy sort+max(degree):
                     # (-singleton, -degree, label_len, nid) — the minimum
                     # tuple wins, exactly matching max(tied, key=degree)
                     # over (label_len asc, nid asc)-sorted ties.
-                    key = (-singleton, -degrees[nid], f.label_len, nid)
+                    key = (-singleton, -degrees[ids[pos]], f.label_len, ids[pos])
                     cur = best_by_term.get(t)
                     if cur is None or key < cur[0]:
-                        best_by_term[t] = (key, nid)
+                        best_by_term[t] = (key, ids[pos])
+    # Term coverage (#1602): scale the per-term exact/prefix tiers by the
+    # squared fraction of query terms the node's LABEL matches, so a lone
+    # generic word that happens to equal a short label (query term "home"
+    # vs. a home() leaf) cannot bury nodes that match several of the query's
+    # terms. Squaring matters because the exact tier is 10x the prefix tier:
+    # at linear coverage a 1-of-10-terms exact match still outscores a
+    # 3-of-10 prefix+substring match. Single-term and full-coverage queries
+    # are unchanged (coverage == 1), so identifier lookups keep exact-match
+    # dominance. Source-file hits score but do not count as coverage: a
+    # colliding leaf whose directory shares tokens with the query (common
+    # near the intended target) must not win back its exact tier via path
+    # fragments. The substring/source bonuses and the full-query tier above
+    # stay unscaled.
+    scored: list[tuple[float, str]] = []
+    for pos, slot in acc.items():
+        tiered, matched, score = slot
         if tiered:
             score += tiered * (matched / n_terms) ** 2
-        score *= weight
+        if path_weight is not None:
+            weight = weight_cache.get(pos)
+            if weight is None:
+                weight = path_weight(node_data[pos])
+            score *= weight
         if score > 0:
-            scored.append((score, nid))
+            scored.append((score, ids[pos]))
     # Sort by score desc; break ties toward the shorter label so a concise exact
     # match beats a longer superset that happens to share the same score.
     scored.sort(key=lambda s: (-s[0], node_fields[s[1]].label_len, s[1]))
@@ -1497,7 +1635,80 @@ def _complete_induced_edges_indexed(
             edges_seen.append((ui, vi))
 
 
+class _Traversal(NamedTuple):
+    """A BFS/DFS result with the induced-edge completion deferred.
+
+    `nodes` and `edges` are what the traversal itself recorded (the edges that
+    discovered a node). `_complete_induced_edges` then adds the subgraph's
+    cross-edges — an O(subgraph) scan that costs up to a third of a broad warm
+    query on the large graph. The renderer can only print an EDGE line once
+    every node fits its character budget, and on a broad query it never does, so
+    `finish()` appends those edges on demand (idempotent) and `has_edge()`
+    answers the truncated path's one remaining question — "would any edge have
+    rendered?" — by stopping at the first hit instead of scanning the subgraph.
+
+    A caller that wants the old eager behaviour calls `finish()` immediately;
+    `_bfs`/`_dfs` do exactly that, so their contract is unchanged.
+    """
+    nodes: set[str]
+    edges: list[tuple[str, str]]
+    finish: "Callable[[], None]"
+    has_edge: "Callable[[], bool]"
+
+
+def _traversal_finisher(
+    ids: list[str],
+    adj: list[list[int]],
+    directed: bool,
+    visited: set[int],
+    edges_seen: list[tuple[int, int]],
+    nodes: set[str],
+    edges: list[tuple[str, str]],
+):
+    """Build the `finish` / `has_edge` pair for a deferred `_Traversal`.
+
+    Both closures read the same int state the traversal produced, so the deferred
+    result is byte-identical to completing eagerly: `finish` runs the exact same
+    completion and appends the string pairs in the same order, and `has_edge`
+    can only ever answer True for a pair the completion would have appended or
+    one already recorded (`edges_seen`'s traversal pairs are checked first, with
+    the same both-ends-in-`nodes` filter the renderer applies).
+    """
+    state = {"done": False}
+
+    def finish() -> None:
+        if state["done"]:
+            return
+        state["done"] = True
+        before = len(edges_seen)
+        _complete_induced_edges_indexed(ids, adj, directed, visited, edges_seen)
+        edges.extend((ids[u], ids[v]) for u, v in edges_seen[before:])
+
+    def has_edge() -> bool:
+        for u, v in edges:
+            if u in nodes and v in nodes:
+                return True
+        # Same scan as the completion, stopped at the first pair it would add.
+        # No `seen` set is needed to answer existence: a pair the traversal
+        # already recorded would have been caught above.
+        for ui in sorted(visited, key=ids.__getitem__):
+            for vi in adj[ui]:
+                if vi == ui or vi not in visited:
+                    continue
+                if ids[ui] in nodes and ids[vi] in nodes:
+                    return True
+        return False
+
+    return finish, has_edge
+
+
 def _bfs(G: nx.Graph, start_nodes: list[str], depth: int) -> tuple[set[str], list[tuple]]:
+    traversal = _bfs_traversal(G, start_nodes, depth)
+    traversal.finish()
+    return traversal.nodes, traversal.edges
+
+
+def _bfs_traversal(G: nx.Graph, start_nodes: list[str], depth: int) -> _Traversal:
     # Hub threshold: nodes above this degree are not expanded as transit.
     # p99 of degree distribution, floored at 50 to avoid over-blocking small graphs.
     hub_threshold = _degree_data(G)[1]
@@ -1524,11 +1735,21 @@ def _bfs(G: nx.Graph, start_nodes: list[str], depth: int) -> tuple[set[str], lis
                     edges_seen.append((n, neighbor))
         visited.update(next_frontier)
         frontier = list(next_frontier)
-    _complete_induced_edges_indexed(ids, adj, G.is_directed(), visited, edges_seen)
-    return {ids[i] for i in visited}, [(ids[u], ids[v]) for u, v in edges_seen]
+    nodes = {ids[i] for i in visited}
+    edges = [(ids[u], ids[v]) for u, v in edges_seen]
+    finish, has_edge = _traversal_finisher(
+        ids, adj, G.is_directed(), visited, edges_seen, nodes, edges
+    )
+    return _Traversal(nodes, edges, finish, has_edge)
 
 
 def _dfs(G: nx.Graph, start_nodes: list[str], depth: int) -> tuple[set[str], list[tuple]]:
+    traversal = _dfs_traversal(G, start_nodes, depth)
+    traversal.finish()
+    return traversal.nodes, traversal.edges
+
+
+def _dfs_traversal(G: nx.Graph, start_nodes: list[str], depth: int) -> _Traversal:
     hub_threshold = _degree_data(G)[1]
     ids, pos, adj, deg_list = _traversal_index(G)
     start_idx = [pos[n] for n in start_nodes]
@@ -1548,10 +1769,41 @@ def _dfs(G: nx.Graph, start_nodes: list[str], depth: int) -> tuple[set[str], lis
                 stack.append((neighbor, d + 1))
                 edges_seen.append((node, neighbor))
     _complete_induced_edges_indexed(ids, adj, G.is_directed(), visited, edges_seen)
-    return {ids[i] for i in visited}, [(ids[u], ids[v]) for u, v in edges_seen]
+    nodes = {ids[i] for i in visited}
+    edges = [(ids[u], ids[v]) for u, v in edges_seen]
+    # `_dfs` appends on push, so `edges_seen` can name a neighbour that was never
+    # visited (pushed past `depth`). `nodes` is the visited set, not this list,
+    # so the deferred finisher is unchanged: it filters on `nodes` exactly as the
+    # renderer does.
+    finish, has_edge = _traversal_finisher(
+        ids, adj, G.is_directed(), visited, edges_seen, nodes, edges
+    )
+    return _Traversal(nodes, edges, finish, has_edge)
 
 
-def _subgraph_to_text(G: nx.Graph, nodes: set[str], edges: list[tuple], token_budget: int = 2000, *, seeds: list[str] | None = None, scores: dict[str, float] | None = None) -> str:
+def _reverse_index(G: nx.Graph) -> "list[list[int]] | None":
+    """Predecessor positions per node for a directed graph, cached per graph.
+
+    `_traversal_index` stores `G.neighbors()` (= successors on a DiGraph) in
+    insertion order. `_subgraph_to_text`'s hop-distance pass walks BOTH edge
+    directions; before this it went through `G.successors(n)` /
+    `G.predecessors(n)` generators, one yield per neighbour, which cost ~0.13 us
+    each on the large graph (767k yields for one broad query). Returns None for
+    an undirected graph, where `adj` already carries both directions.
+    """
+    if not G.is_directed():
+        return None
+    n = G.number_of_nodes()
+    cached = G.graph.get("_radj_index")
+    if cached is not None and cached[0] == n:
+        return cached[1]
+    ids, pos, _adj, _deg = _traversal_index(G)
+    radj = [[pos[p] for p in G.predecessors(nid)] for nid in ids]
+    G.graph["_radj_index"] = (n, radj)
+    return radj
+
+
+def _subgraph_to_text(G: nx.Graph, nodes: set[str], edges: list[tuple], token_budget: int = 2000, *, seeds: list[str] | None = None, scores: dict[str, float] | None = None, finish=None, has_edge=None) -> str:
     """Render subgraph as text, cutting at token_budget (approx 3 chars/token).
 
     seeds: exact-match nodes rendered first before the degree-sorted expansion,
@@ -1559,6 +1811,12 @@ def _subgraph_to_text(G: nx.Graph, nodes: set[str], edges: list[tuple], token_bu
 
     scores: `query`'s node scores. When given, the answer is file-first: seeds
     and then the other nodes are grouped by file, best-scoring file first.
+
+    finish / has_edge: the deferred induced-edge completion from a `_Traversal`
+    (see there). `finish()` is called only on the path that can actually print an
+    EDGE line; `has_edge()` answers the truncated path's "would any edge have
+    rendered?" without building the list. Both None means `edges` is already
+    complete, which is what every non-`_render_query` caller passes.
     """
     char_budget = token_budget * 3
     degrees, _hub = _degree_data(G)
@@ -1571,25 +1829,31 @@ def _subgraph_to_text(G: nx.Graph, nodes: set[str], edges: list[tuple], token_bu
     # the query (a direct hit or its close neighbors) survives the budget cut
     # instead of being pushed past it by incidental high-degree hubs (#BUG2). BFS
     # discovery order was discarded upstream (_bfs returns a set), so recompute
-    # layers here over BOTH edge directions. Deterministic: neighbor iteration is
-    # insertion-ordered and the sort key ends in str(n) (no hash-order).
-    def _adj(n):
-        if G.is_directed():
-            yield from G.successors(n)
-            yield from G.predecessors(n)
-        else:
-            yield from G.neighbors(n)
-    dist: dict[str, int] = {n: 0 for n in seed_hits}
-    frontier, hop = seed_hits, 0
+    # layers here over BOTH edge directions. Deterministic: neighbour iteration is
+    # insertion-ordered and the sort key ends in str(n) (no hash-order). The walk
+    # uses the cached integer adjacency (identical neighbour order, ints instead of
+    # string-id views); only distances are read, so frontier order cannot matter.
+    ids, pos, adj, _deg = _traversal_index(G)
+    radj = _reverse_index(G)
+    node_pos = {pos[n] for n in nodes}
+    dist_pos: dict[int, int] = {pos[n]: 0 for n in seed_hits}
+    frontier = list(dist_pos)
+    hop = 0
     while frontier:
         hop += 1
-        nxt = []
-        for n in frontier:
-            for nb in _adj(n):
-                if nb in nodes and nb not in dist:
-                    dist[nb] = hop
-                    nxt.append(nb)
+        nxt: list[int] = []
+        for i in frontier:
+            for j in adj[i]:
+                if j in node_pos and j not in dist_pos:
+                    dist_pos[j] = hop
+                    nxt.append(j)
+            if radj is not None:
+                for j in radj[i]:
+                    if j in node_pos and j not in dist_pos:
+                        dist_pos[j] = hop
+                        nxt.append(j)
         frontier = nxt
+    dist: dict[str, int] = {ids[i]: h for i, h in dist_pos.items()}
     if scores:
         # File-first (query only): rank files by their best-scoring node in the
         # answer, then list the seeds, and after them the other nodes, file by
@@ -1762,8 +2026,13 @@ def _subgraph_to_text(G: nx.Graph, nodes: set[str], edges: list[tuple], token_bu
         if cut_count > 0:
             # Same notice the general path below emits, with the same numbers:
             # `len(output)` is `node_chars - 1` when no edge line exists and at
-            # least `node_chars` otherwise, which is all `min()` needs.
-            edge_present = any(u in nodes and v in nodes for u, v in edges)
+            # least `node_chars` otherwise, which is all `min()` needs. With a
+            # deferred traversal, `has_edge()` answers that without building the
+            # edge list the budget can never reach.
+            edge_present = (
+                has_edge() if has_edge is not None
+                else any(u in nodes and v in nodes for u, v in edges)
+            )
             output_len = node_chars if edge_present else node_chars - 1
             full_budget = (min(node_chars, output_len) + 2) // 3
             return (
@@ -1778,6 +2047,8 @@ def _subgraph_to_text(G: nx.Graph, nodes: set[str], edges: list[tuple], token_bu
                 f" Narrow with context_filter=['call'] or use get_node for a specific symbol)"
             )
 
+    if finish is not None:
+        finish()
     lines = node_lines + _edge_lines()
     output = "\n".join(lines)
     if len(output) > char_budget:
@@ -2011,7 +2282,7 @@ def _query_graph_text(
         G,
         terms,
         collect_per_term_seeds=True,
-        path_weight=_query_path_weight(terms, demote_docs=demote_docs),
+        path_weight=_query_path_weight(terms, demote_docs=demote_docs, G=G),
     )
     # Relational-intent verbs ("calls", "uses", ...) describe the relation the
     # question asks about, not a symbol to seed from; drop them from the
@@ -2050,7 +2321,15 @@ def _render_query(
 ) -> str:
     resolved_filters, filter_source = _resolve_context_filters(question, context_filters)
     traversal_graph = _filter_graph_by_context(_traversal_view(G), resolved_filters)
-    nodes, edges = _dfs(traversal_graph, start_nodes, depth) if mode == "dfs" else _bfs(traversal_graph, start_nodes, depth)
+    # The induced-edge completion is deferred: a broad query's node block always
+    # overruns the budget, and then no EDGE line can print, so scanning the whole
+    # subgraph for cross-edges would be thrown away (see `_Traversal`).
+    traversal = (
+        _dfs_traversal(traversal_graph, start_nodes, depth)
+        if mode == "dfs"
+        else _bfs_traversal(traversal_graph, start_nodes, depth)
+    )
+    nodes, edges = traversal.nodes, traversal.edges
     header_parts = [
         f"Traversal: {mode.upper()} depth={depth}",
         f"Start{' (given)' if given else ''}: {[G.nodes[n].get('label', n) for n in start_nodes]}",
@@ -2080,7 +2359,8 @@ def _render_query(
     # Pass the seeds so the queried symbol renders first and survives truncation
     # (#BUG2): a branch merge had silently dropped this argument, leaving the
     # seed-first ordering as dead code.
-    return header + _subgraph_to_text(traversal_graph, nodes, edges, token_budget, seeds=start_nodes, scores=scores)
+    return header + _subgraph_to_text(traversal_graph, nodes, edges, token_budget, seeds=start_nodes, scores=scores,
+                                      finish=traversal.finish, has_edge=traversal.has_edge)
 
 
 def _resolve_path_scoped_symbol(G: nx.Graph, path_part: str, symbol_part: str) -> list[str]:
