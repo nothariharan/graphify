@@ -2292,6 +2292,8 @@ def dispatch_command(cmd: str) -> None:
         import time as _time
         _t0 = _time.perf_counter()
         _mode = "dfs" if use_dfs else "bfs"
+        # A persisted index may lack postings from the rows just loaded.
+        G._graphify_one_shot_query = not seeds and G.graph.get("_trigram_index") is None
         _result = _query_graph_text(
             G,
             question,
@@ -3183,7 +3185,8 @@ def dispatch_command(cmd: str) -> None:
         print(f"Graph: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
         stages.mark("load")
         print("Re-clustering...")
-        communities = cluster(G, resolution=co_resolution, exclude_hubs_percentile=co_exclude_hubs)
+        communities = cluster(G, resolution=co_resolution, exclude_hubs_percentile=co_exclude_hubs,
+                               cache_dir=graph_json.parent)
         # Mirror the watch/update path (#822): map new cids to prior ones by
         # node-overlap so the existing .graphify_labels.json keeps attaching
         # to the same conceptual community after re-clustering. Without this,
@@ -4680,6 +4683,7 @@ def dispatch_command(cmd: str) -> None:
             doc_files = []
             paper_files = []
             image_files = []
+            video_files = []
             deleted_files = []
             excluded_files = []
             graph_stale_sources = []
@@ -4701,6 +4705,7 @@ def dispatch_command(cmd: str) -> None:
             doc_files = [Path(p) for p in new_by_type.get("document", [])]
             paper_files = [Path(p) for p in new_by_type.get("paper", [])]
             image_files = [Path(p) for p in new_by_type.get("image", [])]
+            video_files = [Path(p) for p in new_by_type.get("video", [])]
             deleted_files = list(detection.get("deleted_files", []))
             excluded_files = list(detection.get("excluded_files", []))
             unchanged_total = sum(len(v) for v in detection.get("unchanged_files", {}).values())
@@ -4775,6 +4780,7 @@ def dispatch_command(cmd: str) -> None:
             doc_files = [Path(p) for p in files_by_type.get("document", [])]
             paper_files = [Path(p) for p in files_by_type.get("paper", [])]
             image_files = [Path(p) for p in files_by_type.get("image", [])]
+            video_files = [Path(p) for p in files_by_type.get("video", [])]
             deleted_files = []
             excluded_files = []
             graph_stale_sources = []
@@ -4894,6 +4900,16 @@ def dispatch_command(cmd: str) -> None:
             print(
                 f"[graphify extract] {len(_sec)} file(s) skipped as potentially sensitive "
                 f"(rename or move if wrongly flagged): {_snames}{_smore}"
+            )
+        # Audio/video files are detected (classified together under the "video"
+        # bucket) but headless extract has no transcription step wired in, so they
+        # were previously dropped with no trace: a media-only corpus silently wrote
+        # an empty graph and exited 0 with no indication anything had been found
+        # and skipped (#5076).
+        if video_files:
+            print(
+                f"[graphify extract] {len(video_files)} audio/video file(s) detected but "
+                "not extracted (headless extract has no transcription step)"
             )
         stages.mark("detect")
 
@@ -5937,7 +5953,8 @@ def dispatch_command(cmd: str) -> None:
             )
             sys.exit(1)
 
-        communities = _cluster(G, resolution=cli_resolution, exclude_hubs_percentile=cli_exclude_hubs)
+        communities = _cluster(G, resolution=cli_resolution, exclude_hubs_percentile=cli_exclude_hubs,
+                                cache_dir=graphify_out)
         stages.mark("cluster")
         cohesion = _score_all(G, communities)
         try:

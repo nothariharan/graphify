@@ -53,6 +53,45 @@ def _out_from_env() -> str:
 GRAPHIFY_OUT = _out_from_env()
 
 
+# --- Per-file raw-bytes handoff between the cache-key hash and the parse read ---
+#
+# On a cold build each source file was read from disk twice: once by
+# cache.file_hash() to compute the SHA256 cache key, and again by
+# extractors.base._read_source_bytes() to parse it. The two live in different
+# call scopes (load_cached() runs before the extractor), so the bytes are passed
+# between them through this one-slot, context-local handoff: file_hash() stashes
+# the raw bytes it just read, and _read_source_bytes() consumes them for the same
+# path, halving cold-build file I/O. The cache-key value is unchanged — it is the
+# SHA256 of exactly these raw bytes, as before.
+#
+# A ContextVar, not a module global: extraction runs concurrently — a
+# ThreadPoolExecutor in tests, process pools in production — and each thread
+# starts with its own empty context, so a value stashed on one thread is never
+# visible to another (mirrors extractors.base._ACTIVE_SCAN_ROOT). Single slot and
+# keyed by path string: the last writer wins so memory stays bounded to one
+# file's bytes, and a key mismatch simply re-reads from disk — another file's
+# bytes can never be returned. On a warm build file_hash() takes its stat
+# fastpath and never reads, so nothing is stashed and no eager read is forced.
+from contextvars import ContextVar as _ContextVar
+
+_PREREAD_RAW: "_ContextVar[tuple[str, bytes] | None]" = _ContextVar(
+    "_PREREAD_RAW", default=None
+)
+
+
+def stash_preread_bytes(path: "str | Path", raw: bytes) -> None:
+    """Record ``raw`` as the just-read raw bytes of ``path`` for this context."""
+    _PREREAD_RAW.set((str(path), raw))
+
+
+def take_preread_bytes(path: "str | Path") -> "bytes | None":
+    """Return raw bytes stashed for ``path`` in this context, else ``None``."""
+    slot = _PREREAD_RAW.get()
+    if slot is not None and slot[0] == str(path):
+        return slot[1]
+    return None
+
+
 def os_long_path(path: "str | Path") -> str:
     r"""Return an OS path string safe for open()/stat() on Windows long paths.
 
@@ -551,6 +590,26 @@ _WINDOWS_MAX_PATH = 260
 _MIN_STEM_BUDGET = 16
 
 
+def _component_name_max(directory: "str | Path") -> int | None:
+    """``PC_NAME_MAX`` (bytes per path component) of the filesystem holding
+    ``directory``, or ``None`` when it cannot be determined.
+
+    The export directory may not exist yet, so ask its nearest existing
+    ancestor, which is on the same filesystem unless something is mounted in
+    between.
+    """
+    path = Path(directory)
+    for candidate in (path, *path.parents):
+        try:
+            name_max = os.pathconf(str(candidate), "PC_NAME_MAX")
+        except FileNotFoundError:
+            continue
+        except (AttributeError, OSError, ValueError):
+            return None
+        return name_max if name_max > 0 else None
+    return None
+
+
 def stem_filename_budget(output_dir: "str | Path", *, reserve: int = 0, limit: int = 200) -> int:
     """Largest filename stem an exporter may write directly into ``output_dir``.
 
@@ -562,18 +621,27 @@ def stem_filename_budget(output_dir: "str | Path", *, reserve: int = 0, limit: i
     ``C:\\Users\\me\\projects\\svc\\graphify-out\\obsidian`` exceeds MAX_PATH and
     the write dies with ``FileNotFoundError``, aborting the export mid-vault.
 
-    Returns ``limit`` unchanged on POSIX, so existing output is byte-for-byte
-    stable there. On Windows it returns the smaller of ``limit`` and whatever
-    still fits inside MAX_PATH once ``output_dir``, the separator, ``reserve``
-    (room for caller-added prefixes/collision suffixes) and the ``.md``
-    extension are accounted for.
+    On POSIX it returns the smaller of ``limit`` and the target filesystem's
+    real ``PC_NAME_MAX`` less ``reserve`` and the ``.md`` extension. Under the
+    conventional 255 that is still ``limit``, so existing output is
+    byte-for-byte stable; it only shrinks where the filesystem reports less,
+    e.g. eCryptfs, whose filename encryption leaves ~143 bytes (#2109). On
+    Windows it returns the smaller of ``limit`` and whatever still fits inside
+    MAX_PATH once ``output_dir``, the separator, ``reserve`` (room for
+    caller-added prefixes/collision suffixes) and the ``.md`` extension are
+    accounted for.
 
-    The budget is a CHARACTER count, but callers that cap UTF-8 BYTES may pass
-    it straight through: a string's UTF-8 length is never below its character
-    length, so a byte-capped stem always satisfies the character ceiling too.
+    The Windows budget is a CHARACTER count, but callers that cap UTF-8 BYTES
+    may pass it straight through: a string's UTF-8 length is never below its
+    character length, so a byte-capped stem always satisfies the character
+    ceiling too. The POSIX NAME_MAX budget is in BYTES, which a byte-capping
+    caller meets exactly.
     """
     if os.name != "nt":
-        return limit
+        name_max = _component_name_max(output_dir)
+        if name_max is None:
+            return limit
+        return max(_MIN_STEM_BUDGET, min(limit, name_max - reserve - len(".md")))
     try:
         base = os.path.abspath(str(output_dir))
     except (OSError, ValueError):
